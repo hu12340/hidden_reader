@@ -1,0 +1,17 @@
+# 构建产物
+bin/
+obj/
+artifacts/
+publish/
+
+# IDE / 编辑器
+.vs/
+.idea/
+*.user
+*.suo
+
+# 测试书籍由 tools/Make-TestBooks.ps1 生成，可随时重建
+testdata/
+
+# 日志与临时文件
+*.log

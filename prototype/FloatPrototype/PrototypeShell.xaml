@@ -1,0 +1,33 @@
+<Window x:Class="FloatPrototype.PrototypeShell"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HiddenReader 浮窗原型（普通模式）"
+        Width="900" Height="640"
+        WindowStartupLocation="CenterScreen"
+        Background="#F2F2EE">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#FFFFFF" Padding="12,10" BorderBrush="#DDDDD5" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="PrevButton" Content="上一页" Width="86" Height="32" Margin="0,0,8,0" Click="OnPrevClick" />
+                <Button x:Name="NextButton" Content="下一页" Width="86" Height="32" Margin="0,0,8,0" Click="OnNextClick" />
+                <Button x:Name="FloatButton" Content="进入极简浮窗 (F2)" Width="170" Height="32" Margin="16,0,0,0" Click="OnFloatClick" />
+                <TextBlock x:Name="PageLabel" VerticalAlignment="Center" Margin="20,0,0,0" Foreground="#555555" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" Margin="16" Background="#FFFFFF" BorderBrush="#DDDDD5" BorderThickness="1">
+            <Grid x:Name="ReaderHost" />
+        </Border>
+
+        <Border Grid.Row="2" Background="#FFFFFF" Padding="12,8" BorderBrush="#DDDDD5" BorderThickness="0,1,0,0">
+            <TextBlock Foreground="#666666"
+                       Text="单击正文或按 → 翻页；← 返回上一页。极简浮窗中：右键菜单、Ctrl+左键拖动、Esc 返回。" />
+        </Border>
+    </Grid>
+</Window>

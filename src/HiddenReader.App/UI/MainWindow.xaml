@@ -1,0 +1,115 @@
+<Window x:Class="HiddenReader.App.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:HiddenReader.App.UI"
+        Title="HiddenReader"
+        Width="900" Height="640"
+        Background="#1E1F26"
+        Foreground="#E4E2DC">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#2C2E38"/>
+            <Setter Property="Foreground" Value="#E4E2DC"/>
+            <Setter Property="BorderBrush" Value="#4A4C58"/>
+            <Setter Property="Padding" Value="8,3"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#15161C"/>
+            <Setter Property="Foreground" Value="#E4E2DC"/>
+            <Setter Property="BorderBrush" Value="#4A4C58"/>
+            <Setter Property="CaretBrush" Value="#E4E2DC"/>
+        </Style>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="#15161C"/>
+            <Setter Property="Foreground" Value="#E4E2DC"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              ContentStringFormat="{TemplateBinding ContentStringFormat}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#3A3D4B"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#E4E2DC"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="#2C2E38" BorderBrush="#4A4C58" BorderThickness="1" CornerRadius="2">
+                                            <Path Data="M 0 0 L 4 4 L 8 0" Stroke="#9A98A0" StrokeThickness="1.5"
+                                                  HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              Margin="8,4,24,4" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                            <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Border Background="#15161C" BorderBrush="#4A4C58" BorderThickness="1" CornerRadius="2"
+                                        MinWidth="{TemplateBinding ActualWidth}" MaxHeight="320">
+                                    <ScrollViewer>
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ListBox">
+            <Setter Property="Background" Value="#15161C"/>
+            <Setter Property="Foreground" Value="#E4E2DC"/>
+            <Setter Property="BorderBrush" Value="#4A4C58"/>
+        </Style>
+    </Window.Resources>
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#26272F" Padding="8,6">
+            <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <Button x:Name="ImportButton" Content="导入 TXT" Width="84" Margin="0,0,6,0" Click="OnImport"/>
+                    <ComboBox x:Name="BookSelector" Width="240" DisplayMemberPath="Title" SelectionChanged="OnBookSelected"/>
+                    <Button x:Name="RemoveButton" Content="移除" Width="60" Margin="6,0,6,0" Click="OnRemove"/>
+                    <Button x:Name="FloatButton" Content="极简浮窗" Width="84" Click="OnEnterFloat"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="TocButton" Content="目录" Width="60" Margin="0,0,6,0" Click="OnToggleToc"/>
+                    <TextBox x:Name="SearchBox" Width="180" KeyDown="OnSearchKeyDown" VerticalContentAlignment="Center"/>
+                    <Button x:Name="SearchButton" Content="搜索" Width="60" Margin="6,0,0,0" Click="OnSearch"/>
+                    <Button x:Name="PrevHitButton" Content="上一处" Width="60" Margin="6,0,0,0" Click="OnPrevHit"/>
+                    <Button x:Name="NextHitButton" Content="下一处" Width="60" Margin="6,0,0,0" Click="OnNextHit"/>
+                    <TextBlock x:Name="SearchStatus" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#9A98A0"/>
+                    <TextBlock Text="跳至页" VerticalAlignment="Center" Margin="16,0,4,0" Foreground="#9A98A0"/>
+                    <TextBox x:Name="PageBox" Width="56" KeyDown="OnPageKeyDown" VerticalContentAlignment="Center"/>
+                    <TextBlock x:Name="PageLabel" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="#9A98A0"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <ListBox x:Name="TocList" Width="230" Visibility="Collapsed" SelectionChanged="OnChapterSelected"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+            <local:ReadingView x:Name="Reader" Grid.Column="1"/>
+        </Grid>
+    </DockPanel>
+</Window>
