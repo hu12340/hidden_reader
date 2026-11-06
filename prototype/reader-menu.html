@@ -35,14 +35,12 @@
   .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #8eb9f6; }
   .window { height: clamp(480px, 68vh, 710px); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; border: 1px solid #3d4656; border-radius: 9px; background: #1d212a; box-shadow: 0 24px 70px #0008; }
   .titlebar { position: relative; z-index: 2; display: flex; align-items: center; gap: 12px; min-width: 0; height: 44px; padding: 0 9px 0 12px; border-radius: 8px 8px 0 0; background: #1e232d; border-bottom: 1px solid var(--line); }
-  .brand { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; }
   .brand-icon { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 5px; color: #d8e8ff; background: #354d76; }
   .menubar { display: flex; align-items: center; gap: 2px; }
   .menu-anchor { position: relative; }
-  .menu-trigger { display: flex; gap: 6px; align-items: center; white-space: nowrap; padding: 0 9px; height: 30px; }
+  .menu-trigger { display: flex; align-items: center; white-space: nowrap; padding: 0 9px; height: 30px; }
   .menu-trigger[aria-expanded="true"] { background: #34435b; color: #dceaff; }
-  .menu-trigger .icon { width: 14px; height: 14px; color: #afc5e2; }
-  .window-title { position: absolute; left: 50%; transform: translateX(-50%); color: #abb5c4; font-size: 12px; max-width: 24%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+  .float-trigger { width: 32px; justify-content: center; padding: 0; color: #afc5e2; }
   .window-controls { margin-left: auto; display: flex; align-items: center; gap: 18px; color: #a9b3c2; }
   .window-controls .icon { width: 12px; height: 12px; }
   .flyout { position: absolute; top: calc(100% + 6px); left: 0; width: 308px; padding: 5px; border: 1px solid #414b5c; border-radius: 8px; background: #242a35; box-shadow: 0 12px 32px #000a; }
@@ -106,9 +104,8 @@
   .color-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
   .color-row output { margin-left: auto; font: 12px Consolas, monospace; }
   .color-row input { width: 42px; height: 29px; border: 1px solid #586579; border-radius: 4px; background: #151a22; }
-  @media (max-width: 820px) { .window-title { display: none; } }
   @media (max-width: 500px) {
-    .brand span:last-child, .window-controls, .masthead .badge { display: none; }
+    .window-controls, .masthead .badge { display: none; }
     .titlebar { gap: 6px; padding-left: 8px; }
     .flyout { width: min(282px, calc(100vw - 66px)); }
     .view-menu { width: 176px; }
@@ -145,10 +142,10 @@
 
   <section class="window" id="window" aria-label="HiddenReader 阅读器原型">
     <header class="titlebar">
-      <div class="brand"><span class="brand-icon"><svg class="icon" aria-hidden="true"><use href="#book"/></svg></span><span>HiddenReader</span></div>
+      <span class="brand-icon" aria-hidden="true"><svg class="icon"><use href="#book"/></svg></span>
       <nav class="menubar" aria-label="阅读器顶部菜单">
         <div class="menu-anchor">
-          <button class="menu-trigger" id="fileButton" aria-expanded="false" aria-controls="fileMenu">文件 <svg class="icon" aria-hidden="true"><use href="#down"/></svg></button>
+          <button class="menu-trigger" id="fileButton" aria-expanded="false" aria-controls="fileMenu">文件</button>
           <section class="flyout" id="fileMenu" aria-label="文件" hidden>
             <button class="command" id="importButton"><svg class="icon" aria-hidden="true"><use href="#add"/></svg>导入 TXT… <kbd>Ctrl+O</kbd></button>
             <div class="shelf-heading"><span>书架</span><span id="bookCount"></span></div>
@@ -156,16 +153,15 @@
           </section>
         </div>
         <div class="menu-anchor">
-          <button class="menu-trigger" id="viewButton" aria-expanded="false" aria-controls="viewMenu">查看 <svg class="icon" aria-hidden="true"><use href="#down"/></svg></button>
+          <button class="menu-trigger" id="viewButton" aria-expanded="false" aria-controls="viewMenu">查看</button>
           <section class="flyout view-menu" id="viewMenu" aria-label="查看" hidden>
             <button class="command" id="tocButton" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#list"/></svg>目录 <span class="check" id="tocCheck" hidden>✓</span></button>
             <button class="command" id="searchButton"><svg class="icon" aria-hidden="true"><use href="#search"/></svg>搜索 <kbd>Ctrl+F</kbd></button>
             <button class="command" id="colorButton"><svg class="icon" aria-hidden="true"><use href="#color"/></svg>阅读配色…</button>
           </section>
         </div>
-        <button class="menu-trigger" id="floatButton"><svg class="icon" aria-hidden="true"><use href="#float"/></svg>极简浮窗</button>
+        <button class="menu-trigger float-trigger" id="floatButton" title="极简浮窗" aria-label="极简浮窗"><svg class="icon" aria-hidden="true"><use href="#float"/></svg></button>
       </nav>
-      <span class="window-title" id="windowTitle"></span>
       <div class="window-controls" aria-hidden="true"><svg class="icon"><use href="#min"/></svg><svg class="icon"><use href="#max"/></svg><svg class="icon"><use href="#close"/></svg></div>
     </header>
 
@@ -350,7 +346,6 @@
 
   function renderPage() {
     const current = book?.pages[book.page];
-    $('windowTitle').textContent = book?.title ?? '';
     $('bookCaption').textContent = book?.title ?? 'HIDDENREADER';
     $('chapterTitle').textContent = current?.title || (book ? '正文' : '书架为空');
     $('statusText').textContent = current?.title || book?.title || '从「文件」导入 TXT';
