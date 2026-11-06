@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HiddenReader · 顶部菜单原型</title>
+<style>
+  :root {
+    color-scheme: dark;
+    font: 14px/1.5 "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    color: #e5e8ee;
+    --muted: #9ba7b8;
+    --line: #303641;
+    --accent: #9bc4ff;
+    --selection: #263954;
+    --ink: #e4e2dc;
+    --paper: #000;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: radial-gradient(ellipse at 18% 0%, #202b3e, #10141d 63%); min-height: 100vh; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: transparent; border-radius: 5px; }
+  button:hover { background: #343b48; }
+  button:disabled { opacity: .42; cursor: default; background: transparent; }
+  button:focus-visible, input:focus-visible, .viewport:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  svg.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  kbd { font: 11px "Cascadia Mono", Consolas, monospace; color: var(--muted); white-space: nowrap; }
+  .stage { max-width: 1160px; margin: auto; padding: clamp(26px, 5vw, 64px) clamp(12px, 5vw, 64px) 32px; }
+  .eyebrow { color: var(--accent); font: 11px/1.5 "Cascadia Mono", Consolas, monospace; letter-spacing: .18em; }
+  .masthead { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin-bottom: 23px; }
+  h1 { margin: 6px 0 2px; font-size: clamp(24px, 4vw, 34px); font-weight: 650; letter-spacing: -.04em; }
+  .subtitle { margin: 0; color: #aeb9c9; font-size: 13px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid #3c506e; border-radius: 20px; color: #bfdaff; white-space: nowrap; font-size: 12px; }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #8eb9f6; }
+  .window { height: clamp(480px, 68vh, 710px); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; border: 1px solid #3d4656; border-radius: 9px; background: #1d212a; box-shadow: 0 24px 70px #0008; }
+  .titlebar { position: relative; z-index: 2; display: flex; align-items: center; gap: 12px; min-width: 0; height: 44px; padding: 0 9px 0 12px; border-radius: 8px 8px 0 0; background: #1e232d; border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; }
+  .brand-icon { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 5px; color: #d8e8ff; background: #354d76; }
+  .menubar { display: flex; align-items: center; gap: 2px; }
+  .menu-anchor { position: relative; }
+  .menu-trigger { display: flex; gap: 6px; align-items: center; white-space: nowrap; padding: 0 9px; height: 30px; }
+  .menu-trigger[aria-expanded="true"] { background: #34435b; color: #dceaff; }
+  .menu-trigger .icon { width: 14px; height: 14px; color: #afc5e2; }
+  .window-title { position: absolute; left: 50%; transform: translateX(-50%); color: #abb5c4; font-size: 12px; max-width: 24%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+  .window-controls { margin-left: auto; display: flex; align-items: center; gap: 18px; color: #a9b3c2; }
+  .window-controls .icon { width: 12px; height: 12px; }
+  .flyout { position: absolute; top: calc(100% + 6px); left: 0; width: 308px; padding: 5px; border: 1px solid #414b5c; border-radius: 8px; background: #242a35; box-shadow: 0 12px 32px #000a; }
+  .view-menu { width: 204px; }
+  .command { width: 100%; min-height: 36px; display: flex; align-items: center; gap: 10px; text-align: left; padding: 6px 9px; }
+  .command .icon { color: #a8b8ce; }
+  .command kbd, .command .check { margin-left: auto; }
+  .check { color: var(--accent); }
+  .shelf-heading { display: flex; justify-content: space-between; margin: 5px 3px 2px; padding: 9px 6px 4px; border-top: 1px solid #3b4351; color: var(--muted); font-size: 11px; }
+  .shelf { display: grid; gap: 2px; max-height: 225px; overflow: auto; }
+  .book-row { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; padding-right: 4px; border-radius: 5px; }
+  .book-row:hover { background: #303845; }
+  .book-row.current { background: var(--selection); }
+  .book-row .command:hover { background: #ffffff0c; }
+  .book-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .remove { display: grid; place-items: center; height: 29px; color: #a9b4c6; }
+  .remove:hover, .remove:focus-visible { background: #573642; color: #ffbdc3; }
+  .shelf-empty { margin: 6px 9px 9px; color: var(--muted); font-size: 12px; }
+  .findbar { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 6px 9px; border-bottom: 1px solid var(--line); }
+  .findbar input, .page-input { border: 1px solid #495466; border-radius: 4px; background: #141821; padding: 3px 7px; }
+  .findbar input { width: min(230px, 48vw); min-width: 0; }
+  .findbar output { min-width: 42px; color: var(--muted); font-size: 12px; text-align: center; }
+  .icon-button { display: grid; place-items: center; width: 27px; height: 27px; }
+  .reading { grid-row: 3; position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); min-height: 0; }
+  .toc { width: min(194px, 34vw); padding: 14px 8px; background: #1b2029; border-right: 1px solid var(--line); overflow: auto; }
+  .toc-head { display: flex; justify-content: space-between; align-items: center; color: var(--muted); margin: 0 0 6px 7px; }
+  .toc-entry { display: block; width: 100%; text-align: left; padding: 7px; overflow-wrap: anywhere; font-size: 12px; }
+  .toc-entry[aria-current="true"] { background: var(--selection); color: #deebff; }
+  .viewport { grid-column: 2; overflow: auto; background: var(--paper); color: var(--ink); }
+  .leaf { max-width: 710px; min-height: 100%; margin: auto; padding: clamp(32px, 5.4vw, 72px) clamp(22px, 6vw, 74px) 30px; }
+  .book-caption { margin: 0 0 14px; color: inherit; opacity: .7; font-size: 11px; letter-spacing: .2em; }
+  .chapter { margin: 0 0 20px; font: 600 clamp(20px, 3vw, 27px)/1.4 "Songti SC", "Noto Serif CJK SC", SimSun, serif; letter-spacing: .06em; }
+  .chapter-rule { height: 1px; width: 34px; background: currentColor; opacity: .42; margin-bottom: 25px; }
+  .prose { font: 16px/2.1 "Songti SC", "Noto Serif CJK SC", SimSun, serif; overflow-wrap: anywhere; }
+  .prose p { margin: 0 0 15px; text-indent: 2em; }
+  mark { border-radius: 2px; background: #f9d88c; color: #211b10; }
+  mark.active { outline: 1px solid #fff2c8; }
+  .status { grid-row: 4; display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; color: #b0baca; border-top: 1px solid var(--line); font-size: 12px; }
+  .status .icon { width: 14px; height: 14px; }
+  .status-text { min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .page-input { width: 44px; height: 24px; text-align: center; color: #e5e8ee; font-variant-numeric: tabular-nums; }
+  .status output { white-space: nowrap; }
+  .stage-footer { margin-top: 19px; display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #aeb9c9; font-size: 12px; }
+  .return { padding: 5px 9px; color: #c7e0ff; background: #273750; white-space: nowrap; }
+  .window.floating { width: min(560px, 100%); margin: auto; height: 365px; grid-template-rows: 1fr; border-radius: 4px; }
+  .floating .titlebar, .floating .status, .floating .findbar, .floating .toc { display: none; }
+  .floating .reading { grid-row: 1; }
+  .floating .leaf { padding: 24px 30px; }
+  .floating .book-caption, .floating .chapter-rule { display: none; }
+  dialog { width: min(420px, calc(100vw - 32px)); color: #e5e8ee; background: #232a35; padding: 21px; border: 1px solid #465468; border-radius: 9px; box-shadow: 0 16px 48px #0009; }
+  dialog::backdrop { background: #080c1580; }
+  #colorDialog::backdrop { background: transparent; }
+  dialog h2 { font-size: 18px; margin: 0 0 8px; }
+  dialog p { color: #b6c1d0; margin: 0 0 18px; overflow-wrap: anywhere; }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .action { min-height: 32px; padding: 4px 11px; background: #333e50; }
+  .action.primary { color: #162133; background: #a3c8ff; }
+  .action.primary:hover { background: #c3dcff; }
+  .action.danger { background: #783a48; }
+  .action.danger:hover { background: #934757; }
+  .color-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+  .color-row output { margin-left: auto; font: 12px Consolas, monospace; }
+  .color-row input { width: 42px; height: 29px; border: 1px solid #586579; border-radius: 4px; background: #151a22; }
+  @media (max-width: 820px) { .window-title { display: none; } }
+  @media (max-width: 500px) {
+    .brand span:last-child, .window-controls, .masthead .badge { display: none; }
+    .titlebar { gap: 6px; padding-left: 8px; }
+    .flyout { width: min(282px, calc(100vw - 66px)); }
+    .view-menu { width: 176px; }
+    .leaf { padding-inline: 17px; }
+    .prose { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" hidden>
+  <symbol id="book" viewBox="0 0 16 16"><path d="M8 4C5.5 2 3 2 1.5 3v9c2-1 4.3-1 6.5 1 2.2-2 4.5-2 6.5-1V3C13 2 10.5 2 8 4v9"/></symbol>
+  <symbol id="add" viewBox="0 0 16 16"><path d="M3 1.5h6.5l3 3v10h-9zM9 1.5V5h3.5M5.5 9.5h4.5M7.75 7.25v4.5"/></symbol>
+  <symbol id="float" viewBox="0 0 16 16"><rect x="1.5" y="2" width="13" height="11.5" rx="2"/><rect x="7.5" y="7.5" width="5" height="3.8" rx=".5"/></symbol>
+  <symbol id="list" viewBox="0 0 16 16"><path d="M5 4h9M5 8h9M5 12h9M2 4h.1M2 8h.1M2 12h.1"/></symbol>
+  <symbol id="search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><path d="m10 10 3.5 3.5"/></symbol>
+  <symbol id="color" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 2v12m0-9 3-2m-3 5 5-3m-5 6 6-3m-6 6 5-3"/></symbol>
+  <symbol id="close" viewBox="0 0 16 16"><path d="m4 4 8 8m0-8-8 8"/></symbol>
+  <symbol id="down" viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></symbol>
+  <symbol id="up" viewBox="0 0 16 16"><path d="m4 10 4-4 4 4"/></symbol>
+  <symbol id="left" viewBox="0 0 16 16"><path d="m10 4-4 4 4 4"/></symbol>
+  <symbol id="right" viewBox="0 0 16 16"><path d="m6 4 4 4-4 4"/></symbol>
+  <symbol id="min" viewBox="0 0 16 16"><path d="M2 8h12"/></symbol>
+  <symbol id="max" viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12"/></symbol>
+</svg>
+<main class="stage">
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">HIDDENREADER / WINDOWS UI</div>
+      <h1>顶部菜单原型</h1>
+      <p class="subtitle">打开小说、查找正文，或一键切到极简浮窗。</p>
+    </div>
+    <span class="badge">可交互原型</span>
+  </header>
+
+  <section class="window" id="window" aria-label="HiddenReader 阅读器原型">
+    <header class="titlebar">
+      <div class="brand"><span class="brand-icon"><svg class="icon" aria-hidden="true"><use href="#book"/></svg></span><span>HiddenReader</span></div>
+      <nav class="menubar" aria-label="阅读器顶部菜单">
+        <div class="menu-anchor">
+          <button class="menu-trigger" id="fileButton" aria-expanded="false" aria-controls="fileMenu">文件 <svg class="icon" aria-hidden="true"><use href="#down"/></svg></button>
+          <section class="flyout" id="fileMenu" aria-label="文件" hidden>
+            <button class="command" id="importButton"><svg class="icon" aria-hidden="true"><use href="#add"/></svg>导入 TXT… <kbd>Ctrl+O</kbd></button>
+            <div class="shelf-heading"><span>书架</span><span id="bookCount"></span></div>
+            <div class="shelf" id="shelf"></div>
+          </section>
+        </div>
+        <div class="menu-anchor">
+          <button class="menu-trigger" id="viewButton" aria-expanded="false" aria-controls="viewMenu">查看 <svg class="icon" aria-hidden="true"><use href="#down"/></svg></button>
+          <section class="flyout view-menu" id="viewMenu" aria-label="查看" hidden>
+            <button class="command" id="tocButton" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#list"/></svg>目录 <span class="check" id="tocCheck" hidden>✓</span></button>
+            <button class="command" id="searchButton"><svg class="icon" aria-hidden="true"><use href="#search"/></svg>搜索 <kbd>Ctrl+F</kbd></button>
+            <button class="command" id="colorButton"><svg class="icon" aria-hidden="true"><use href="#color"/></svg>阅读配色…</button>
+          </section>
+        </div>
+        <button class="menu-trigger" id="floatButton"><svg class="icon" aria-hidden="true"><use href="#float"/></svg>极简浮窗</button>
+      </nav>
+      <span class="window-title" id="windowTitle"></span>
+      <div class="window-controls" aria-hidden="true"><svg class="icon"><use href="#min"/></svg><svg class="icon"><use href="#max"/></svg><svg class="icon"><use href="#close"/></svg></div>
+    </header>
+
+    <section class="findbar" id="findbar" aria-label="搜索正文" hidden>
+      <input type="search" id="query" aria-label="搜索正文" placeholder="搜索当前小说">
+      <output id="hitCount" aria-live="polite"></output>
+      <button class="icon-button" id="prevHit" title="上一处" aria-label="上一处"><svg class="icon" aria-hidden="true"><use href="#up"/></svg></button>
+      <button class="icon-button" id="nextHit" title="下一处" aria-label="下一处"><svg class="icon" aria-hidden="true"><use href="#down"/></svg></button>
+      <button class="icon-button" id="closeFind" title="关闭搜索" aria-label="关闭搜索"><svg class="icon" aria-hidden="true"><use href="#close"/></svg></button>
+    </section>
+
+    <div class="reading">
+      <aside class="toc" id="toc" aria-label="章节目录" hidden>
+        <div class="toc-head">目录 <button class="icon-button" id="closeToc" aria-label="关闭目录"><svg class="icon" aria-hidden="true"><use href="#close"/></svg></button></div>
+        <div id="chapters"></div>
+      </aside>
+      <div class="viewport" id="viewport" tabindex="0" aria-label="小说正文">
+        <article class="leaf">
+          <p class="book-caption" id="bookCaption"></p>
+          <h2 class="chapter" id="chapterTitle"></h2>
+          <div class="chapter-rule"></div>
+          <div class="prose" id="prose"></div>
+        </article>
+      </div>
+    </div>
+
+    <footer class="status">
+      <svg class="icon" aria-hidden="true"><use href="#book"/></svg><span class="status-text" id="statusText"></span>
+      <button class="icon-button" id="prevPage" title="上一页" aria-label="上一页"><svg class="icon" aria-hidden="true"><use href="#left"/></svg></button>
+      <input class="page-input" id="pageInput" inputmode="numeric" aria-label="跳至页，输入页码后按回车" title="输入页码后按回车">
+      <output id="pageTotal" for="pageInput"></output>
+      <button class="icon-button" id="nextPage" title="下一页" aria-label="下一页"><svg class="icon" aria-hidden="true"><use href="#right"/></svg></button>
+    </footer>
+  </section>
+
+  <footer class="stage-footer">
+    <span id="hint" role="status">试试「文件」里的书架，或在「查看」中打开目录。</span>
+    <button class="return" id="returnButton" hidden>返回普通模式 <kbd>Esc</kbd></button>
+    <span id="sessionNote">示例书库 · 刷新可重置</span>
+  </footer>
+</main>
+
+<input id="txtPicker" type="file" accept=".txt,text/plain" hidden>
+<dialog id="removeDialog" aria-labelledby="removeTitle">
+  <form method="dialog">
+    <h2 id="removeTitle">从书架移除小说？</h2>
+    <p id="removeDescription"></p>
+    <div class="dialog-actions">
+      <button class="action" value="cancel" autofocus>取消</button>
+      <button class="action danger" value="remove">移除</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="colorDialog" aria-labelledby="colorTitle">
+  <form method="dialog">
+    <h2 id="colorTitle">阅读配色</h2>
+    <p>调整后可立即在正文中预览。</p>
+    <label class="color-row">正文文字 <output id="inkValue"></output><input type="color" id="ink"></label>
+    <label class="color-row">阅读背景 <output id="paperValue"></output><input type="color" id="paper"></label>
+    <div class="dialog-actions">
+      <button class="action" type="button" id="resetColors">恢复默认</button>
+      <button class="action" value="cancel">取消</button>
+      <button class="action primary" value="apply">确定</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const chapter = (title, ...paragraphs) => ({ title, paragraphs });
+  const books = [
+    { title: '凡人修仙传', page: 0, pages: [
+      chapter('第一章 山边小村',
+        '山间的雾还没散尽，村口的石阶已经透出些湿意。韩立背着竹篓站在门前，听见隔壁传来劈柴声。沿着石阶往上走，便是一条通往山外的旧路。',
+        '昨夜下过一场小雨，溪水比平时涨了半尺。他绕到上游，借着几块露出水面的青石跨过去。回头时，村里的炊烟刚从瓦檐升起，渐渐融进了薄雾。',
+        '韩立在路口停了一会儿，把母亲塞来的干粮往篓底压了压。山外的路他只走过一回，再往前是什么样，还得亲眼去看。'),
+      chapter('第二章 山路来客', '过了溪水，山路渐渐窄了。韩立在一棵松树旁遇到一位歇脚的客人，客人问起下山的方向。'),
+      chapter('第三章 一封旧信', '纸上只写了短短几行字。韩立把旧信折好，放回竹篓旁的布袋。'),
+      chapter('第四章 越过青岭', '岭上的风吹开了薄雾。山下的村子只剩一角屋顶，前方的驿道已经清晰可见。')
+    ] },
+    { title: '江城夜雨', page: 0, pages: [
+      chapter('第一章 江畔的灯', '夜雨落在江面上。旧码头亮起一盏灯，照见雨里最后一班渡船。'),
+      chapter('第二章 渡口', '渡船贴着岸边停稳。撑伞的人没有上船，只把一封信递给了船夫。')
+    ] },
+    { title: '北岸来信', page: 0, pages: [
+      chapter('第一章 冬日邮局', '邮局开门的时候，北岸刚下过雪。门边的木凳上摆着一叠待寄的明信片。'),
+      chapter('第二章 白色航线', '渡船穿过清晨的薄雾，向看不见的对岸驶去。')
+    ] }
+  ];
+  let book = books[0];
+  let activeMenu = null;
+  let hits = [];
+  let hitIndex = -1;
+  const defaultColors = { ink: '#e4e2dc', paper: '#000000' };
+  let savedColors = defaultColors;
+
+  function icon(name) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const use = document.createElementNS(svg.namespaceURI, 'use');
+    svg.setAttribute('class', 'icon');
+    svg.setAttribute('aria-hidden', 'true');
+    use.setAttribute('href', '#' + name);
+    svg.append(use);
+    return svg;
+  }
+
+  function setMenu(name, focusFirst = false) {
+    activeMenu = name;
+    for (const menu of ['file', 'view']) {
+      $(menu + 'Menu').hidden = name !== menu;
+      $(menu + 'Button').setAttribute('aria-expanded', String(name === menu));
+    }
+    if (name && focusFirst) $(name + 'Menu').querySelector('button:not(:disabled)')?.focus();
+  }
+
+  function renderShelf() {
+    $('bookCount').textContent = books.length + ' 本';
+    $('shelf').replaceChildren();
+    if (!books.length) {
+      const empty = document.createElement('p');
+      empty.className = 'shelf-empty';
+      empty.textContent = '书架为空，可以导入一本 TXT 小说。';
+      $('shelf').append(empty);
+    }
+    for (const item of books) {
+      const row = document.createElement('div');
+      row.className = item === book ? 'book-row current' : 'book-row';
+      const select = document.createElement('button');
+      select.className = 'command';
+      select.title = item.title;
+      select.setAttribute('aria-current', String(item === book));
+      const name = document.createElement('span');
+      name.className = 'book-name';
+      name.textContent = item.title;
+      select.append(icon('book'), name);
+      if (item === book) {
+        const tick = document.createElement('span');
+        tick.className = 'check';
+        tick.textContent = '✓';
+        tick.setAttribute('aria-hidden', 'true');
+        select.append(tick);
+      }
+      select.onclick = () => openBook(item);
+      const remove = document.createElement('button');
+      remove.className = 'remove';
+      remove.title = '从书架移除《' + item.title + '》';
+      remove.setAttribute('aria-label', remove.title);
+      remove.append(icon('close'));
+      remove.onclick = () => {
+        $('removeDescription').textContent = '《' + item.title + '》将从原型书架移除。本机的原始 TXT 文件会保留。';
+        $('removeDialog').querySelector('form').onsubmit = (event) => {
+          event.preventDefault();
+          $('removeDialog').close();
+          if (event.submitter?.value !== 'remove') return;
+          books.splice(books.indexOf(item), 1);
+          if (item === book) openBook(books[0] ?? null);
+          else renderShelf();
+          $('hint').textContent = '已从原型书架移除《' + item.title + '》。';
+          setMenu('file', true);
+        };
+        $('removeDialog').showModal();
+      };
+      row.append(select, remove);
+      $('shelf').append(row);
+    }
+  }
+
+  function openBook(item) {
+    setMenu(null);
+    book = item;
+    if (!book) {
+      setFind(false);
+      setToc(false);
+    }
+    $('query').value = '';
+    hits = [];
+    hitIndex = -1;
+    renderShelf();
+    renderPage();
+    $('viewport').focus();
+  }
+
+  function renderPage() {
+    const current = book?.pages[book.page];
+    $('windowTitle').textContent = book?.title ?? '';
+    $('bookCaption').textContent = book?.title ?? 'HIDDENREADER';
+    $('chapterTitle').textContent = current?.title || (book ? '正文' : '书架为空');
+    $('statusText').textContent = current?.title || book?.title || '从「文件」导入 TXT';
+    $('pageInput').value = book ? book.page + 1 : '';
+    $('pageTotal').textContent = book ? '/ ' + book.pages.length + ' 页' : '页';
+    for (const id of ['pageInput', 'tocButton', 'searchButton', 'floatButton']) $(id).disabled = !book;
+    $('prevPage').disabled = !book || book.page === 0;
+    $('nextPage').disabled = !book || book.page === book.pages.length - 1;
+    renderChapters();
+    renderFind();
+    $('prose').replaceChildren();
+    const paragraphs = current?.paragraphs ?? ['点击顶部的「文件」，导入一本小说开始阅读。'];
+    paragraphs.forEach((text, paragraphIndex) => {
+      const p = document.createElement('p');
+      const visibleHits = hits.filter((hit) => hit.page === book?.page && hit.paragraph === paragraphIndex);
+      let offset = 0;
+      for (const hit of visibleHits) {
+        const mark = document.createElement('mark');
+        mark.classList.toggle('active', hit === hits[hitIndex]);
+        mark.textContent = text.slice(hit.start, hit.end);
+        p.append(text.slice(offset, hit.start), mark);
+        offset = hit.end;
+      }
+      p.append(text.slice(offset));
+      $('prose').append(p);
+    });
+    $('viewport').scrollTop = 0;
+  }
+
+  function goToPage(page) {
+    if (!book || page < 0 || page >= book.pages.length) return;
+    book.page = page;
+    hitIndex = -1;
+    renderPage();
+  }
+
+  function renderChapters() {
+    $('chapters').replaceChildren();
+    book?.pages.forEach((page, index) => {
+      if (!page.title) return;
+      const entry = document.createElement('button');
+      entry.className = 'toc-entry';
+      entry.textContent = page.title;
+      entry.setAttribute('aria-current', String(index === book.page));
+      entry.onclick = () => {
+        goToPage(index);
+        $('viewport').focus();
+      };
+      $('chapters').append(entry);
+    });
+    if (!$('chapters').childElementCount) {
+      const empty = document.createElement('p');
+      empty.className = 'shelf-empty';
+      empty.textContent = '没有识别到章节。';
+      $('chapters').append(empty);
+    }
+  }
+
+  function setToc(open) {
+    $('toc').hidden = !open;
+    $('tocCheck').hidden = !open;
+    $('tocButton').setAttribute('aria-pressed', String(open));
+  }
+
+  function setFind(open) {
+    $('findbar').hidden = !open;
+    if (open) {
+      $('query').focus();
+      $('query').select();
+    } else {
+      $('query').value = '';
+      hits = [];
+      hitIndex = -1;
+      renderPage();
+    }
+  }
+
+  function renderFind() {
+    $('hitCount').textContent = hits.length
+      ? (hitIndex < 0 ? '–' : hitIndex + 1) + ' / ' + hits.length
+      : $('query').value.trim() ? '0 处' : '';
+    $('prevHit').disabled = $('nextHit').disabled = !hits.length;
+  }
+
+  function search() {
+    const query = $('query').value.trim();
+    hits = [];
+    hitIndex = -1;
+    if (query && book) {
+      const literal = new RegExp(RegExp.escape(query), 'gi');
+      book.pages.forEach((page, pageIndex) => page.paragraphs.forEach((text, paragraph) => {
+        for (const match of text.matchAll(literal)) {
+          hits.push({ page: pageIndex, paragraph, start: match.index, end: match.index + match[0].length });
+        }
+      }));
+    }
+    if (hits.length) {
+      const next = hits.findIndex((hit) => hit.page >= book.page);
+      showHit(next < 0 ? 0 : next);
+    } else {
+      renderPage();
+    }
+  }
+
+  function showHit(index) {
+    if (!hits.length) return;
+    hitIndex = (index + hits.length) % hits.length;
+    book.page = hits[hitIndex].page;
+    renderPage();
+    $('prose').querySelector('mark.active')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function setFloating(floating) {
+    setMenu(null);
+    $('window').classList.toggle('floating', floating);
+    $('returnButton').hidden = !floating;
+    $('sessionNote').hidden = floating;
+    $('hint').textContent = floating
+      ? '浮窗样式预览 · 按 Esc 或点击「返回普通模式」。'
+      : '试试「文件」里的书架，或在「查看」中打开目录。';
+    (floating ? $('viewport') : $('floatButton')).focus();
+  }
+
+  function applyColors(colors) {
+    for (const key of ['ink', 'paper']) {
+      document.documentElement.style.setProperty('--' + key, colors[key]);
+      $(key).value = colors[key];
+      $(key + 'Value').textContent = colors[key].toUpperCase();
+    }
+  }
+
+  function pickFile() {
+    setMenu(null);
+    $('fileButton').focus();
+    $('txtPicker').click();
+  }
+
+  async function importFile(file) {
+    if (!file.name.toLowerCase().endsWith('.txt')) throw new Error('请选择 .txt 文件。');
+    if (file.size > 2 * 1024 * 1024) throw new Error('原型支持 2 MB 以内的 TXT。');
+    const bytes = await file.arrayBuffer();
+    const prefix = new Uint8Array(bytes, 0, Math.min(2, bytes.byteLength));
+    let text;
+    if (prefix[0] === 255 && prefix[1] === 254) {
+      text = new TextDecoder('utf-16le').decode(bytes);
+    } else if (prefix[0] === 254 && prefix[1] === 255) {
+      text = new TextDecoder('utf-16be').decode(bytes);
+    } else {
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      } catch {
+        text = new TextDecoder('gb18030').decode(bytes);
+      }
+    }
+    if (!text.trim()) throw new Error('这个 TXT 文件没有正文。');
+    const pages = [];
+    let page = chapter('');
+    let length = 0;
+    for (const line of text.split(/\r\n?|\n/).map((value) => value.trim()).filter(Boolean)) {
+      if (/^第[一二三四五六七八九十百千万零〇两\d]+[章回节卷].{0,70}$/.test(line)) {
+        if (length || page.title) pages.push(page);
+        page = chapter(line);
+        length = 0;
+      } else {
+        for (const paragraph of line.match(/.{1,550}/gu) ?? []) {
+          if (length && length + paragraph.length > 550) {
+            pages.push(page);
+            page = chapter('');
+            length = 0;
+          }
+          page.paragraphs.push(paragraph);
+          length += paragraph.length;
+        }
+      }
+    }
+    if (length || page.title) pages.push(page);
+    const item = { title: file.name.slice(0, -4), page: 0, pages };
+    books.push(item);
+    openBook(item);
+    $('hint').textContent = '已在原型中打开《' + item.title + '》。';
+  }
+
+  for (const name of ['file', 'view']) {
+    $(name + 'Button').onclick = (event) => setMenu(activeMenu === name ? null : name, event.detail === 0);
+    $(name + 'Button').onkeydown = (event) => {
+      if (event.key !== 'ArrowDown') return;
+      event.preventDefault();
+      setMenu(name, true);
+    };
+  }
+  document.addEventListener('pointerdown', (event) => {
+    if (activeMenu && !event.target.closest('.menu-anchor') && !event.target.closest('dialog')) setMenu(null);
+  });
+  $('importButton').onclick = pickFile;
+  $('txtPicker').onchange = async (event) => {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      await importFile(file);
+    } catch (error) {
+      $('hint').textContent = '导入失败。' + error.message;
+    }
+  };
+  $('tocButton').onclick = () => {
+    setMenu(null);
+    setToc($('toc').hidden);
+    if ($('toc').hidden) $('viewButton').focus();
+    else ($('chapters').querySelector('[aria-current="true"]') ?? $('chapters').querySelector('button'))?.focus();
+  };
+  $('closeToc').onclick = () => { setToc(false); $('viewButton').focus(); };
+  $('searchButton').onclick = () => { setMenu(null); setFind(true); };
+  $('query').oninput = search;
+  $('query').onkeydown = (event) => {
+    if (event.key === 'Enter') showHit(hitIndex < 0 ? 0 : hitIndex + (event.shiftKey ? -1 : 1));
+  };
+  $('prevHit').onclick = () => showHit(hitIndex < 0 ? hits.length - 1 : hitIndex - 1);
+  $('nextHit').onclick = () => showHit(hitIndex + 1);
+  $('closeFind').onclick = () => { setFind(false); $('viewport').focus(); };
+  $('colorButton').onclick = () => {
+    setMenu(null);
+    applyColors(savedColors);
+    $('colorDialog').showModal();
+  };
+  for (const key of ['ink', 'paper']) {
+    $(key).oninput = () => applyColors({ ink: $('ink').value, paper: $('paper').value });
+  }
+  $('resetColors').onclick = () => applyColors(defaultColors);
+  function closeColorDialog(event) {
+    event.preventDefault();
+    if (event.submitter?.value === 'apply') savedColors = { ink: $('ink').value, paper: $('paper').value };
+    $('colorDialog').close();
+    applyColors(savedColors);
+    $('viewButton').focus();
+  }
+  $('colorDialog').querySelector('form').onsubmit = closeColorDialog;
+  $('colorDialog').oncancel = closeColorDialog;
+  $('floatButton').onclick = () => setFloating(true);
+  $('returnButton').onclick = () => setFloating(false);
+  $('prevPage').onclick = () => goToPage(book.page - 1);
+  $('nextPage').onclick = () => goToPage(book.page + 1);
+  $('pageInput').onfocus = () => $('pageInput').select();
+  $('pageInput').onblur = () => { $('pageInput').value = book ? book.page + 1 : ''; };
+  $('pageInput').onkeydown = (event) => {
+    if (event.key !== 'Enter') return;
+    const value = $('pageInput').value.trim();
+    if (/^\d+$/.test(value)) goToPage(Number(value) - 1);
+    $('viewport').focus();
+  };
+  $('viewport').onkeydown = (event) => {
+    if (!book || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    event.preventDefault();
+    goToPage(book.page + (event.key === 'ArrowRight' ? 1 : -1));
+  };
+  document.addEventListener('keydown', (event) => {
+    if (document.querySelector('dialog[open]')) return;
+    const floating = $('window').classList.contains('floating');
+    if (event.key === 'Escape') {
+      if (floating) setFloating(false);
+      else if (activeMenu) {
+        $(activeMenu + 'Button').focus();
+        setMenu(null);
+      } else if (!$('findbar').hidden) $('closeFind').click();
+    }
+    if (floating || !event.ctrlKey || event.altKey || event.metaKey) return;
+    if (event.key.toLowerCase() === 'o') {
+      event.preventDefault();
+      pickFile();
+    } else if (event.key.toLowerCase() === 'f' && book) {
+      event.preventDefault();
+      $('searchButton').click();
+    }
+  });
+
+  renderShelf();
+  renderPage();
+  setMenu('file');
+</script>
+</body>
+</html>
