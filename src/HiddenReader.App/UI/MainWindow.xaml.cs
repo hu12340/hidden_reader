@@ -25,6 +25,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // 应用级阅读配色先于任何绘制载入：旧状态缺少颜色字段时使用默认值。
+        ReadingColors.Load(_library.State);
         // 标题栏在句柄就绪后由 DWM 着色：系统浅色主题下也保持深色，并随焦点调整文字亮度。
         DarkTitleBar.Attach(this);
         // 分页结果回调统一封送回 UI 线程。
@@ -128,6 +130,7 @@ public partial class MainWindow : Window
 
         // 提交成功（Remove 返回 true；副本删除失败仅记日志、由启动清理兜底）才走清理路径。
         _openGeneration++; // 使仍在进行的开书结果作废，避免恢复已被移除的书。
+        CloseReadingColorsPanel();
         _float?.Dispose();
         _float = null;
         _currentBook = null;
@@ -146,6 +149,8 @@ public partial class MainWindow : Window
 
     private async Task OpenBookAsync(BookInfo book)
     {
+        // 换书前关掉配色面板：配色是应用级的，但面板的预览草稿不应跨书残留。
+        CloseReadingColorsPanel();
         int generation = ++_openGeneration;
         // 解码与章节识别都在后台线程：期间窗口可重绘、可移动，并显示当前阶段。
         _busy = true;
@@ -436,6 +441,8 @@ public partial class MainWindow : Window
     private void EnterFloatMode()
     {
         if (_currentBook is null || _session is null) return;
+        // 面板不能挂在即将隐藏的宿主上：切模式前先取消预览。
+        CloseReadingColorsPanel();
         SaveProgress();
 
         if (_float is null)
@@ -445,6 +452,7 @@ public partial class MainWindow : Window
             _float.ReturnToNormalRequested += OnReturnToNormal;
             _float.ExitRequested += OnExitFromFloat;
             _float.StateChanged += OnFloatStateChanged;
+            _float.ReadingColorsRequested += OpenReadingColorsPanel;
         }
         _float.Show();
         Hide();
@@ -463,6 +471,7 @@ public partial class MainWindow : Window
 
     private void OnReturnToNormal()
     {
+        CloseReadingColorsPanel();
         if (_currentBook is not null && _float is not null)
         {
             _library.GetBookState(_currentBook.Id).Float = _float.CaptureState();
@@ -504,6 +513,76 @@ public partial class MainWindow : Window
             _library.State.LastMode = "normal";
         }
         _library.Save();
+    }
+
+    // ---------- 阅读配色 ----------
+
+    /// <summary>当前打开的配色面板；同一时刻只保留一个。</summary>
+    private ReadingColorsWindow? _colorsPanel;
+
+    private void OnOpenReadingColors(object sender, RoutedEventArgs e) => OpenReadingColorsPanel();
+
+    /// <summary>
+    /// 打开阅读配色面板：普通模式以本窗口为宿主；极简浮窗模式以浮窗为宿主并置顶，
+    /// 因此浮窗置顶时面板仍在前台可操作。两个入口共用同一个面板。
+    /// </summary>
+    private void OpenReadingColorsPanel()
+    {
+        if (_colorsPanel is not null)
+        {
+            _colorsPanel.Activate();
+            return;
+        }
+
+        var panel = new ReadingColorsWindow(ReadingColors.ConfirmedText, ReadingColors.ConfirmedBackground,
+            ReadingColors.Preview, CommitReadingColors, ReadingColors.RestoreConfirmed);
+        if (_float is { } floatWindow)
+        {
+            // 浮窗是原生 Win32 顶层窗口（可能在置顶带），面板以它的句柄为所有者并自身置顶：
+            // 否则面板会被置顶浮窗压住而无法操作。
+            panel.Topmost = true;
+            panel.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            new System.Windows.Interop.WindowInteropHelper(panel).Owner = floatWindow.Handle;
+        }
+        else
+        {
+            panel.Owner = this;
+        }
+
+        panel.Closed += (_, _) => _colorsPanel = null;
+        _colorsPanel = panel;
+        panel.Show();
+        panel.Activate();
+    }
+
+    /// <summary>
+    /// 「确定」：沿用 Library.Save() 的原子保存写入应用级配色。
+    /// 保存失败时回滚内存中的状态并把视图恢复为已确认值，面板保留草稿供重试。
+    /// </summary>
+    private bool CommitReadingColors(Color text, Color background)
+    {
+        var state = _library.State;
+        string previousText = state.TextColor;
+        string previousBackground = state.BackgroundColor;
+        state.TextColor = ReadingColors.Format(text);
+        state.BackgroundColor = ReadingColors.Format(background);
+        if (_library.Save())
+        {
+            ReadingColors.Confirm(text, background);
+            return true;
+        }
+        state.TextColor = previousText;
+        state.BackgroundColor = previousBackground;
+        ReadingColors.RestoreConfirmed();
+        return false;
+    }
+
+    /// <summary>切换模式或换书前关闭面板：取消预览，避免面板挂在已隐藏的宿主窗口上。</summary>
+    private void CloseReadingColorsPanel()
+    {
+        if (_colorsPanel is null) return;
+        _colorsPanel.Close(); // 未「确定」的关闭按「取消」处理，恢复打开面板前的配色
+        _colorsPanel = null;
     }
 
     /// <summary>启动时若上次以浮窗退出，直接恢复浮窗。</summary>

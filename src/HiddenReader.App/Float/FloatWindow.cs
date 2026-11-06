@@ -42,6 +42,7 @@ internal sealed class FloatWindow : IDisposable
     private const int ID_BORDER_0 = 120;
     private const int ID_BORDER_50 = 121;
     private const int ID_BORDER_100 = 122;
+    private const int ID_COLORS = 125;
     private const int ID_NORMAL = 130;
     private const int ID_EXIT = 140;
 
@@ -196,6 +197,8 @@ internal sealed class FloatWindow : IDisposable
     private int _downX;
     private int _downY;
     private bool _disposed;
+    /// <summary>正文文字画刷：来自应用级阅读配色，与普通模式共用。</summary>
+    private SolidColorBrush _textBrush = CreateBrush(ReadingColors.Text);
 
     public bool Topmost { get; private set; }
     public double BackgroundOpacity { get; private set; }
@@ -207,6 +210,8 @@ internal sealed class FloatWindow : IDisposable
     public event Action? ExitRequested;
     /// <summary>任何交互后触发，宿主可保存状态。</summary>
     public event Action? StateChanged;
+    /// <summary>右键菜单请求打开阅读配色面板：宿主以浮窗为宿主窗口打开同一个面板。</summary>
+    public event Action? ReadingColorsRequested;
 
     public IntPtr Handle => _hwnd;
 
@@ -260,7 +265,26 @@ internal sealed class FloatWindow : IDisposable
 
         _presenter = new CompositionPresenter(_hwnd);
         _presenter.Initialize(GetDpiForWindow(_hwnd) / 96.0);
+        ReadingColors.Changed += OnColorsChanged;
         Diagnostics.Log($"float window created hwnd={_hwnd} dpi={GetDpiForWindow(_hwnd)}");
+    }
+
+    /// <summary>
+    /// 配色变化只提交新帧：_page 与锚点保留，不重排，阅读位置不变。
+    /// 浮窗背景的 Alpha 仍由背景不透明度决定，文字与边框的不透明度各自独立。
+    /// </summary>
+    private void OnColorsChanged()
+    {
+        if (_disposed) return;
+        _textBrush = CreateBrush(ReadingColors.Text);
+        Render();
+    }
+
+    private static SolidColorBrush CreateBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     public void Show()
@@ -585,6 +609,7 @@ internal sealed class FloatWindow : IDisposable
             AppendMenuW(menu, MF_STRING | (Math.Abs(BorderOpacity - 0.5) < 0.01 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BORDER_50), "边框不透明度 50%");
             AppendMenuW(menu, MF_STRING | (BorderOpacity >= 0.99 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BORDER_100), "边框不透明度 100%");
             AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, string.Empty);
+            AppendMenuW(menu, MF_STRING, new IntPtr(ID_COLORS), "阅读配色…");
             AppendMenuW(menu, MF_STRING, new IntPtr(ID_NORMAL), "返回普通模式");
             AppendMenuW(menu, MF_STRING, new IntPtr(ID_EXIT), "退出");
 
@@ -612,6 +637,9 @@ internal sealed class FloatWindow : IDisposable
             case ID_BORDER_0: BorderOpacity = 0; break;
             case ID_BORDER_50: BorderOpacity = 0.5; break;
             case ID_BORDER_100: BorderOpacity = 1; break;
+            case ID_COLORS:
+                ReadingColorsRequested?.Invoke();
+                return;
             case ID_NORMAL:
                 ReturnToNormalRequested?.Invoke();
                 return;
@@ -704,9 +732,11 @@ internal sealed class FloatWindow : IDisposable
     {
         var page = _page ?? Paginator.Layout(_session.Text, _session.Anchor, width, height, _session.Settings, Scale);
 
-        // 正文底色纯黑（需求第 7 节）：RGB 固定为 #000000，只有背景不透明度进 Alpha，
-        // 因此 100% 为纯黑、50% 为半透明黑、0% 完全透出后方画面；文字与边框的不透明度各自独立。
-        var background = Color.FromArgb((byte)Math.Round(BackgroundOpacity * 255), 0, 0, 0);
+        // 正文底色取应用级阅读配色（需求第 7 节）：RGB 来自所选背景色，Alpha 只由背景不透明度决定，
+        // 因此 100% 为所选颜色、50% 与后方画面混合、0% 完全透出；文字与边框的不透明度各自独立。
+        Color backgroundColor = ReadingColors.Background;
+        var background = Color.FromArgb((byte)Math.Round(BackgroundOpacity * 255),
+            backgroundColor.R, backgroundColor.G, backgroundColor.B);
         if (background.A > 0)
         {
             dc.DrawRectangle(new SolidColorBrush(background), null, new Rect(0, 0, width, height));
@@ -718,7 +748,7 @@ internal sealed class FloatWindow : IDisposable
             selection = new HighlightRange(Math.Min(_selectionAnchor, _selectionFocus), Math.Abs(_selectionFocus - _selectionAnchor));
         }
 
-        PageRenderer.DrawPage(dc, page, PageRenderer.DefaultTextBrush, CollectPageHighlights(page), selection);
+        PageRenderer.DrawPage(dc, page, _textBrush, CollectPageHighlights(page), selection);
 
         if (BorderOpacity > 0.001)
         {
@@ -830,6 +860,8 @@ internal sealed class FloatWindow : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        // 静态事件：浮窗销毁后必须摘掉，否则切换书籍后旧窗口仍被引用并继续重绘。
+        ReadingColors.Changed -= OnColorsChanged;
         _presenter.Dispose();
         if (_hwnd != IntPtr.Zero)
         {

@@ -51,6 +51,14 @@ public sealed class AppState
     public double? WindowY { get; set; }
     public double WindowWidth { get; set; } = 900;
     public double WindowHeight { get; set; } = 640;
+
+    /// <summary>
+    /// 应用级阅读配色（`#RRGGBB`），普通模式与极简浮窗的所有书籍共用。
+    /// 旧状态缺少这两个字段时保持属性初始化器里的默认值，书库与阅读进度照常读取。
+    /// 面板草稿不写在这里：预览期间的其他保存（锚点、窗口状态）只会写入已确认的配色。
+    /// </summary>
+    public string TextColor { get; set; } = "#E4E2DC";
+    public string BackgroundColor { get; set; } = "#000000";
 }
 
 /// <summary>

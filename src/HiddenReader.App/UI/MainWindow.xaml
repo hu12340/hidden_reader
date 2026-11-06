@@ -90,6 +90,7 @@
                     <ComboBox x:Name="BookSelector" Width="240" SelectionChanged="OnBookSelected"/>
                     <Button x:Name="RemoveButton" Content="移除" Width="60" Margin="6,0,6,0" Click="OnRemove"/>
                     <Button x:Name="FloatButton" Content="极简浮窗" Width="84" Click="OnEnterFloat"/>
+                    <Button x:Name="ColorsButton" Content="阅读配色" Width="76" Margin="6,0,0,0" Click="OnOpenReadingColors"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="TocButton" Content="目录" Width="60" Margin="0,0,6,0" Click="OnToggleToc"/>

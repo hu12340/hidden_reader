@@ -17,6 +17,8 @@ public sealed class ReadingView : FrameworkElement
     private int _selectionFocus = -1;
     private bool _selecting;
     private Point _downPoint;
+    private SolidColorBrush _textBrush = CreateBrush(ReadingColors.Text);
+    private SolidColorBrush _backgroundBrush = CreateBrush(ReadingColors.Background);
 
     public event Action? SessionAdvanced;
     /// <summary>视图尺寸变化（重排保持位置后触发），宿主据此重新请求后台全书分页。</summary>
@@ -27,6 +29,26 @@ public sealed class ReadingView : FrameworkElement
         Focusable = true;
         ClipToBounds = true;
         Cursor = Cursors.IBeam;
+        ReadingColors.Changed += OnColorsChanged;
+        Unloaded += (_, _) => ReadingColors.Changed -= OnColorsChanged;
+    }
+
+    /// <summary>
+    /// 配色变化只重绘当前页：保留 _page、阅读锚点与选区，不做重排。
+    /// 重排只在尺寸或锚点变化时发生，避免预览配色时阅读位置跳动。
+    /// </summary>
+    private void OnColorsChanged()
+    {
+        _textBrush = CreateBrush(ReadingColors.Text);
+        _backgroundBrush = CreateBrush(ReadingColors.Background);
+        InvalidateVisual();
+    }
+
+    private static SolidColorBrush CreateBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     public void SetSession(ReadingSession? session)
@@ -90,19 +112,12 @@ public sealed class ReadingView : FrameworkElement
         e.Handled = true;
     }
 
-    // 正文底色纯黑（需求第 7 节）：普通窗口与极简浮窗一致，不随主题变化。
-    private static readonly Brush PageBackground = FreezeBrush(new SolidColorBrush(Colors.Black));
-
-    private static Brush FreezeBrush(Brush brush)
-    {
-        brush.Freeze();
-        return brush;
-    }
-
+    // 正文底色取应用级阅读配色（需求第 7 节）：普通窗口始终不透明，
+    // 与极简浮窗共用一套已确认的配色，不随系统主题变化。
     protected override void OnRender(DrawingContext dc)
     {
         double width = ActualWidth, height = ActualHeight;
-        dc.DrawRectangle(PageBackground, null, new Rect(0, 0, width, height));
+        dc.DrawRectangle(_backgroundBrush, null, new Rect(0, 0, width, height));
         if (_session is null) return;
 
         if (_page is null)
@@ -117,7 +132,7 @@ public sealed class ReadingView : FrameworkElement
             selection = new HighlightRange(Math.Min(_selectionAnchor, _selectionFocus), Math.Abs(_selectionFocus - _selectionAnchor));
         }
 
-        PageRenderer.DrawPage(dc, _page, PageRenderer.DefaultTextBrush, CollectPageHighlights(_page), selection);
+        PageRenderer.DrawPage(dc, _page, _textBrush, CollectPageHighlights(_page), selection);
     }
 
     private IReadOnlyList<HighlightRange> CollectPageHighlights(PageLayout page)
