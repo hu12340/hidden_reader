@@ -13,5 +13,8 @@ publish/
 # 测试书籍由 tools/Make-TestBooks.ps1 生成，可随时重建
 testdata/
 
+# 开发/审查轮的运行与验证目录：脚本、截图、结果和数据副本留在本地，不入仓库
+.run/
+
 # 日志与临时文件
 *.log

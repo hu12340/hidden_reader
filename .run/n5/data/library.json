@@ -1,0 +1,50 @@
+{
+  "Books": [
+    {
+      "Id": "aa85bc4c715140b9810d77da1b025399",
+      "Title": "\u51E1\u4EBA\u4FEE\u4ED9\u4F20",
+      "FileName": "aa85bc4c715140b9810d77da1b025399.txt",
+      "SourcePath": "C:\\Users\\80756\\Documents\\\u51E1\u4EBA\u4FEE\u4ED9\u4F20.txt",
+      "AddedAt": "2026-11-06T14:03:56.6141324+08:00"
+    },
+    {
+      "Id": "e662fc8a258141828977873ea156ef96",
+      "Title": "test-book-2",
+      "FileName": "e662fc8a258141828977873ea156ef96.txt",
+      "SourcePath": "D:\\MyProjects\\HiddenReader\\testdata\\test-book-2.txt",
+      "AddedAt": "2026-11-06T14:20:48.5664587+08:00"
+    }
+  ],
+  "LastBookId": "aa85bc4c715140b9810d77da1b025399",
+  "LastMode": "normal",
+  "PerBook": {
+    "aa85bc4c715140b9810d77da1b025399": {
+      "Anchor": 2672974,
+      "Float": {
+        "BackgroundOpacity": 0.85,
+        "BorderOpacity": 1,
+        "Topmost": true,
+        "X": 2956,
+        "Y": 1008,
+        "Width": 460,
+        "Height": 360
+      }
+    },
+    "e662fc8a258141828977873ea156ef96": {
+      "Anchor": 0,
+      "Float": {
+        "BackgroundOpacity": 1,
+        "BorderOpacity": 0,
+        "Topmost": true,
+        "X": 2836,
+        "Y": 1068,
+        "Width": 486,
+        "Height": 423
+      }
+    }
+  },
+  "WindowX": 2524,
+  "WindowY": 416,
+  "WindowWidth": 900,
+  "WindowHeight": 640
+}

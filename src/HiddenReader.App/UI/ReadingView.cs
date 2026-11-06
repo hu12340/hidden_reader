@@ -19,6 +19,8 @@ public sealed class ReadingView : FrameworkElement
     private Point _downPoint;
 
     public event Action? SessionAdvanced;
+    /// <summary>视图尺寸变化（重排保持位置后触发），宿主据此重新请求后台全书分页。</summary>
+    public event Action? LayoutSizeChanged;
 
     public ReadingView()
     {
@@ -55,6 +57,35 @@ public sealed class ReadingView : FrameworkElement
         }
         _page = null;
         InvalidateVisual();
+        LayoutSizeChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// 滚轮连续滚动正文，可停在整页边界之间。滚轮事件只有光标位于本视图时
+    /// 才会路由进来，正文区外转动滚轮天然不影响正文。
+    /// </summary>
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        if (_session is null) { base.OnMouseWheel(e); return; }
+        int notches = e.Delta / 120;
+        if (notches == 0 && e.Delta != 0) notches = Math.Sign(e.Delta);
+        if (notches == 0) { base.OnMouseWheel(e); return; }
+        int linesPerNotch = WheelInput.LinesPerNotch();
+        // 上限防止「一次滚动多屏」的滚轮把读者甩出视野。
+        int lines = Math.Clamp(Math.Abs(notches) * linesPerNotch, 1, 30);
+        bool moved = notches > 0
+            ? _session.ScrollDownLines(lines, ActualWidth, ActualHeight, Scale)
+            : _session.ScrollUpLines(lines, ActualWidth, ActualHeight, Scale);
+        if (moved)
+        {
+            // 滚动后清除旧选区（选区随页消失，避免残留错误高亮）。
+            _selectionAnchor = -1;
+            _selectionFocus = -1;
+            _page = null;
+            InvalidateVisual();
+            SessionAdvanced?.Invoke();
+        }
+        e.Handled = true;
     }
 
     private static readonly Brush PageBackground = FreezeBrush(new SolidColorBrush(Color.FromRgb(0x1E, 0x1F, 0x26)));

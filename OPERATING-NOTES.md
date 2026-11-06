@@ -23,9 +23,10 @@
 - 关键步骤：给数据项重写 `ToString()` 返回显示文本（与 TocItem 同法），并移除 DisplayMemberPath；闭合框内容绑定 `SelectionBoxItem.Title`。
 - 证据：`artifacts/combo-probe-open.png`（修复前下拉项显示类型名）与 `artifacts/n2-03-toolbar-after-failure.png`（修复后显示 book1）；提交记录见 `REPORT-N1-N2.md` §N2 附带修复。
 
-### PowerShell 5.1 中文脚本必须保存为 UTF-8 with BOM
-- 适用：所有含中文的 `.ps1`。无 BOM 时按系统 ANSI 解析，中文字符串/正则全部乱码并产生解析错误。
-- 关键步骤：`[IO.File]::WriteAllText($path, (ReadAllText ...), (New-Object Text.UTF8Encoding $true))`。
+### PowerShell 5.1 中文脚本必须保存为 UTF-8 with BOM（2026-11-06 复验）
+- 适用：所有含中文的 `.ps1`。AI 的文件工具默认写 UTF-8 无 BOM，新写脚本运行前必须转换；纯 ASCII 驱动脚本豁免。无 BOM 时按系统 ANSI 解析，中文字符串/正则全部乱码并产生解析错误（如「字符串缺少终止符」，脚本整体不执行，编辑器中显示正常）。
+- 关键步骤：`[IO.File]::WriteAllText($path, (ReadAllText ...), (New-Object Text.UTF8Encoding $true))`；批量转换建议写一个纯 ASCII 的驱动脚本逐个改写目标脚本，避免在 shell 内联命令中转义路径与反斜杠（内联转义错误会另产生空杂散文件）。
+- 证据：`.run/rvw/convert.ps1`（驱动脚本）与 `.run/rvw/test-rvw1.ps1`（转换后成功运行，结果 `rvw1-result.txt`）。
 
 ### SetCursorPos 偶发不生效，鼠标点击前必须校验坐标
 - 适用：`tools/gui.ps1` 的 `Mouse-Click`/`Mouse-DownAt`（已内置 `Move-CursorVerified` 重试）。
@@ -37,6 +38,21 @@
 - 适用：验证复制功能、文本框交互。
 - 关键步骤：先真实点击文本框（`Mouse-Click` 中心点）获取焦点，再 Ctrl+A、Ctrl+C；断言剪贴板内容而非焦点归属。
 - 证据：`REPORT-D1-D5.md` §3.3。
+
+### WM_CLOSE 不退出应用：ShutdownMode=OnExplicitShutdown（2026-11-06）
+- 适用：脚本化验收中「关闭主窗口/退出应用」步骤；基线 73b0666 与 feat/large-book-reading 均如此。
+- 事实：`App.xaml` 设 `ShutdownMode="OnExplicitShutdown"`，`PostMessage(WM_CLOSE)` 后主窗口销毁但进程驻留（空书库与大书库均实测 10–15 秒不退出）。进程退出只经浮窗菜单「退出」的 `Application.Shutdown()` 路径。
+- 关键步骤：脚本验收用 `Stop-Process -Id` 结束实例（阅读锚点在翻页/滚动/跳页时即时落盘，强杀不丢进度）；「退出后重启」场景可改状态后重启，或用强杀代替正常退出并在报告中注明。
+
+### 自绘 FrameworkElement 无 UIA 矩形，点击坐标从宿主窗口推算（2026-11-06）
+- 适用：对 `ReadingView`（自定义 FrameworkElement，无 AutomationPeer）做鼠标自动化。
+- 症状：UIA 取 `BoundingRectangle` 为空，`SetCursorPos(0,0)` 式点击全部落空且无报错。
+- 关键步骤：用主窗口 `BoundingRectangle` 推算正文区（约窗口 62% 宽、55% 高处，避开顶部工具栏与目录栏）；窗口位置在显示器右侧时坐标为物理像素，直接可用。
+
+### FindWindow 按类名 + null 标题查不到浮窗（2026-11-06）
+- 适用：查找 `HiddenReaderFloatWindow`（WS_POPUP + WS_EX_TOOLWINDOW，标题「HiddenReader 浮窗」）。
+- 事实：`gui.ps1` 的 `FindWindow(cls, $null)` 实测返回 0；传完整标题能命中。
+- 关键步骤：优先用 `Get-ProcessWindows($pid)` + `Get-WindowClass` 轮询筛选类名，最稳。
 
 ### 显示缩放无法用注册表即时切换
 - 适用：需要 150% 缩放实测时。

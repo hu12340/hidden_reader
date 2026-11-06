@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -11,14 +12,21 @@ namespace HiddenReader.App.UI;
 public partial class MainWindow : Window
 {
     private readonly Library _library = new();
+    private readonly BackgroundPager _pager;
     private ReadingSession? _session;
     private BookInfo? _currentBook;
     private List<ChapterInfo> _chapters = new();
     private FloatWindow? _float;
+    /// <summary>导入/打开期间为真：状态栏显示阶段文字，期间不刷新页码。</summary>
+    private bool _busy;
+    /// <summary>开书序号：切换书籍或重复选择时使旧的异步结果作废。</summary>
+    private int _openGeneration;
 
     public MainWindow()
     {
         InitializeComponent();
+        // 分页结果回调统一封送回 UI 线程。
+        _pager = new BackgroundPager(result => Dispatcher.BeginInvoke(() => ApplyPageStarts(result)));
         Loaded += OnLoaded;
     }
 
@@ -53,6 +61,7 @@ public partial class MainWindow : Window
         WindowPlacement.EnsureWindowVisible(
             new System.Windows.Interop.WindowInteropHelper(this).Handle);
 
+        Reader.LayoutSizeChanged += OnReaderLayoutChanged;
         RefreshBookList(selectId: state.LastBookId);
     }
 
@@ -66,7 +75,7 @@ public partial class MainWindow : Window
         BookSelector.SelectedItem = _library.State.Books.FirstOrDefault(b => b.Id == selectId);
     }
 
-    private void OnImport(object sender, RoutedEventArgs e)
+    private async void OnImport(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
@@ -74,14 +83,28 @@ public partial class MainWindow : Window
             Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*",
         };
         if (dialog.ShowDialog(this) != true) return;
+        // 复制副本在后台线程执行：期间窗口可重绘、可移动，并显示当前阶段。
+        ImportButton.IsEnabled = false;
+        _busy = true;
+        PageLabel.Text = $"正在导入《{Path.GetFileNameWithoutExtension(dialog.FileName)}》…";
         try
         {
-            var book = _library.Import(dialog.FileName);
-            RefreshBookList(book.Id);
+            var book = await Task.Run(() => _library.Import(dialog.FileName));
+            if (_busy)
+            {
+                // RefreshBookList 会选中新书并触发 OpenBookAsync（自行管理 _busy 与阶段文字）。
+                RefreshBookList(book.Id);
+            }
         }
         catch (Exception ex)
         {
+            _busy = false;
+            PageLabel.Text = string.Empty;
             MessageBox.Show(this, "导入失败：" + ex.Message, "HiddenReader");
+        }
+        finally
+        {
+            ImportButton.IsEnabled = true;
         }
     }
 
@@ -102,6 +125,7 @@ public partial class MainWindow : Window
         }
 
         // 提交成功（Remove 返回 true；副本删除失败仅记日志、由启动清理兜底）才走清理路径。
+        _openGeneration++; // 使仍在进行的开书结果作废，避免恢复已被移除的书。
         _float?.Dispose();
         _float = null;
         _currentBook = null;
@@ -112,36 +136,92 @@ public partial class MainWindow : Window
         SearchStatus.Text = string.Empty;
     }
 
-    private void OnBookSelected(object sender, SelectionChangedEventArgs e)
+    private async void OnBookSelected(object sender, SelectionChangedEventArgs e)
     {
         if (BookSelector.SelectedItem is not BookInfo book) return;
-        OpenBook(book);
+        await OpenBookAsync(book);
     }
 
-    private void OpenBook(BookInfo book)
+    private async Task OpenBookAsync(BookInfo book)
     {
+        int generation = ++_openGeneration;
+        // 解码与章节识别都在后台线程：期间窗口可重绘、可移动，并显示当前阶段。
+        _busy = true;
+        BookSelector.IsEnabled = false;
+        PageLabel.Text = $"正在打开《{book.Title}》：解码正文…";
         try
         {
             // 切书时旧的浮窗绑定的是上一本书的会话，直接丢弃。
             _float?.Dispose();
             _float = null;
-            string text = _library.ReadBook(book);
+            string text = await Task.Run(() => _library.ReadBook(book));
+            if (generation != _openGeneration) return;
+
+            // 正文解码完成即显示并可阅读：单页排版只依赖锚点，不等章节识别与全书分页。
             _currentBook = book;
             _session = new ReadingSession(text);
             var bookState = _library.GetBookState(book.Id);
             _session.Anchor = Math.Clamp(bookState.Anchor, 0, text.Length);
-            _chapters = Chapters.Detect(text);
-            Diagnostics.Log($"book '{book.Title}' chars={text.Length} chapters={_chapters.Count}");
             Reader.SetSession(_session);
             Reader.Focus();
             _library.State.LastBookId = book.Id;
             _library.Save();
+
+            _busy = false;
+            UpdateStatusLabel();
+            RequestPagination();
+
+            // 启动恢复：App.OnStartup 在异步开书完成前调用过一次（当时还没有会话），
+            // 会话就绪后在这里补齐浮窗恢复，不必等章节识别。
+            RestoreFloatModeIfRequested();
+
+            PageLabel.Text = $"正在打开《{book.Title}》：识别章节…";
+            _chapters = await Task.Run(() => Chapters.Detect(text));
+            if (generation != _openGeneration) return;
+            Diagnostics.Log($"book '{book.Title}' chars={text.Length} chapters={_chapters.Count}");
             UpdateStatusLabel();
         }
         catch (Exception ex)
         {
+            if (generation != _openGeneration) return;
+            _busy = false;
+            PageLabel.Text = string.Empty;
             MessageBox.Show(this, "打开书籍失败：" + ex.Message, "HiddenReader");
         }
+        finally
+        {
+            if (generation == _openGeneration) BookSelector.IsEnabled = true;
+        }
+    }
+
+    /// <summary>按当前视图尺寸请求后台全书分页；结果就绪后由 ApplyPageStarts 应用。</summary>
+    private void RequestPagination()
+    {
+        if (_session is null || Reader.ActualWidth < 2 || Reader.ActualHeight < 2) return;
+        double ppd = VisualTreeHelper.GetDpi(Reader).DpiScaleX;
+        _pager.Request(_session, Reader.ActualWidth, Reader.ActualHeight, ppd);
+    }
+
+    /// <summary>
+    /// 视图完成首次布局或缩放后：请求全书分页并刷新页码显示。
+    /// 启动时开书早于布局完成，此处是页码/百分比首次可见的时机。
+    /// </summary>
+    private void OnReaderLayoutChanged()
+    {
+        RequestPagination();
+        UpdateStatusLabel();
+    }
+
+    private void ApplyPageStarts(BackgroundPager.Result result)
+    {
+        // 会话已被替换（切书）或布局尺寸已变化（缩放）的过期结果直接丢弃。
+        if (_session != result.Session) return;
+        if (_session is null || Reader.ActualWidth < 2 || Reader.ActualHeight < 2) return;
+        double ppd = VisualTreeHelper.GetDpi(Reader).DpiScaleX;
+        if (Reader.ActualWidth != result.Width || Reader.ActualHeight != result.Height
+            || Math.Abs(ppd - result.Ppd) > 0.001) return;
+        _session.SetPageStarts(result.Starts, result.Width, result.Height, result.Ppd);
+        UpdateStatusLabel();
     }
 
     private void OnReadingAdvanced()
@@ -150,28 +230,34 @@ public partial class MainWindow : Window
         SaveProgress();
     }
 
+    /// <summary>
+    /// 刷新页码/百分比显示。总页数未算好时显示阅读百分比（锚点/正文长度），
+    /// 算好后显示当前布局的准确页码并允许按页跳转。
+    /// 不在此处做全书分页——翻页和滚动只做单页排版。
+    /// </summary>
     private void UpdateStatusLabel()
     {
+        // 导入/打开阶段由流程自己写阶段文字，这里不覆盖。
+        if (_busy) return;
         if (_session is null || Reader.ActualWidth < 2)
         {
             PageLabel.Text = string.Empty;
             return;
         }
         double ppd = VisualTreeHelper.GetDpi(Reader).DpiScaleX;
-        int page = PageIndexOf(_session.Anchor);
-        int total = _session.PageCount(Reader.ActualWidth, Reader.ActualHeight, ppd);
-        string chapter = CurrentChapterTitle();
+        if (!_session.HasPageStarts(Reader.ActualWidth, Reader.ActualHeight, ppd))
+        {
+            double fraction = _session.Text.Length > 0 ? (double)_session.Anchor / _session.Text.Length : 0;
+            PageLabel.Text = $"阅读 {fraction * 100:0.#}%　总页数计算中…";
+            PageBox.IsEnabled = false;
+            return;
+        }
+        int page = _session.CachedPageIndex(_session.Anchor);
+        int total = _session.CachedPageCount;
+        string? chapter = CurrentChapterTitle();
         PageLabel.Text = $"第 {page}/{total} 页" + (chapter is null ? "" : $"　{chapter}");
+        PageBox.IsEnabled = true;
         PageBox.Text = page.ToString();
-    }
-
-    private int PageIndexOf(int anchor)
-    {
-        if (_session is null) return 1;
-        double ppd = VisualTreeHelper.GetDpi(Reader).DpiScaleX;
-        var starts = _session.PageStarts(Reader.ActualWidth, Reader.ActualHeight, ppd);
-        int index = starts.LastIndexOf(anchor);
-        return index >= 0 ? index + 1 : 1;
     }
 
     private string? CurrentChapterTitle()
@@ -324,6 +410,8 @@ public partial class MainWindow : Window
         if (_session is null) return;
         if (!int.TryParse(PageBox.Text.Trim(), out int pageNumber)) return;
         double ppd = VisualTreeHelper.GetDpi(Reader).DpiScaleX;
+        // 总页数未算好（输入框此时禁用）不允许按页跳转，避免在 UI 线程全书排版。
+        if (!_session.HasPageStarts(Reader.ActualWidth, Reader.ActualHeight, ppd)) return;
         _session.JumpToPage(pageNumber, Reader.ActualWidth, Reader.ActualHeight, ppd);
         Reader.Relayout();
         UpdateStatusLabel();

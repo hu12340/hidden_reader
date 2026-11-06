@@ -150,11 +150,37 @@ public static class Paginator
         for (int i = 0; i < 400; i++)
         {
             var page = Layout(text, start, width, height, settings, ppd);
-            if (page.End >= target || page.Lines.Count == 0) return start;
+            // 页覆盖 [start, End)：target 等于 End 时属于下一页（页首），不能折回本页。
+            if (page.End > target || page.Lines.Count == 0) return start;
             if (page.End <= start) return start;
             start = page.End;
         }
         return start;
+    }
+
+    /// <summary>
+    /// 收集 offset 之前的行首（最多 count 个）。返回顺序按距 offset 由近及远，
+    /// 因此向上滚动 count 行后的新行首为末尾元素。行断点依赖当前布局宽度，
+    /// 与页边界无关——滚动停在两页之间时同样适用。
+    /// </summary>
+    public static List<int> CollectLineStartsBefore(string text, int offset, int count, double width, double height, TextSettings settings, double ppd)
+    {
+        var result = new List<int>();
+        if (count <= 0 || offset <= 0) return result;
+        int searchFrom = offset;
+        while (result.Count < count && searchFrom > 0)
+        {
+            int pageStart = PreviousPageStart(text, searchFrom, width, height, settings, ppd);
+            if (pageStart >= searchFrom) break;
+            var page = Layout(text, pageStart, width, height, settings, ppd);
+            for (int i = page.Lines.Count - 1; i >= 0 && result.Count < count; i--)
+            {
+                int lineStart = page.Lines[i].Start;
+                if (lineStart < searchFrom) result.Add(lineStart);
+            }
+            searchFrom = pageStart;
+        }
+        return result;
     }
 
     /// <summary>返回当前页之前一页的起始偏移。</summary>

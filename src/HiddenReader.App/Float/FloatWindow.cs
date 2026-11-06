@@ -32,6 +32,7 @@ internal sealed class FloatWindow : IDisposable
     private const int WM_LBUTTONUP = 0x0202;
     private const int WM_RBUTTONUP = 0x0205;
     private const int WM_KEYDOWN = 0x0100;
+    private const int WM_MOUSEWHEEL = 0x020A;
     private const int WM_DPICHANGED = 0x02E0;
 
     private const int ID_TOPMOST = 100;
@@ -178,6 +179,9 @@ internal sealed class FloatWindow : IDisposable
     private readonly CompositionPresenter _presenter;
     private readonly ReadingSession _session;
     private PageLayout? _page;
+    /// <summary>生成 _page 时使用的锚点。尺寸不变但锚点已变（有效翻页）时必须重新排版，
+    /// 否则浮窗会一直显示旧页——这正是固定尺寸浮窗翻页不刷新的根源。</summary>
+    private int _laidAnchor = -1;
     private int _layoutWidth;
     private int _layoutHeight;
     private int _selectionAnchor = -1;
@@ -357,6 +361,11 @@ internal sealed class FloatWindow : IDisposable
                 return IntPtr.Zero;
             case WM_KEYDOWN:
                 OnKeyDown((int)wParam);
+                return IntPtr.Zero;
+            case WM_MOUSEWHEEL:
+                // Windows「悬停时滚动非活动窗口」开启（默认）时，滚轮无需焦点即可送达；
+                // 关闭时需要先点一下浮窗取得焦点。
+                OnMouseWheel((short)((wParam.ToInt64() >> 16) & 0xFFFF));
                 return IntPtr.Zero;
             case WM_DPICHANGED:
                 {
@@ -540,6 +549,25 @@ internal sealed class FloatWindow : IDisposable
         }
     }
 
+    /// <summary>滚轮连续滚动正文，可停在整页边界之间；与普通模式共用 ReadingSession 滚动语义。</summary>
+    private void OnMouseWheel(int delta)
+    {
+        int notches = delta / 120;
+        if (notches == 0 && delta != 0) notches = Math.Sign(delta);
+        if (notches == 0) return;
+        int linesPerNotch = WheelInput.LinesPerNotch();
+        int lines = Math.Clamp(Math.Abs(notches) * linesPerNotch, 1, 30);
+        bool moved = notches > 0
+            ? _session.ScrollDownLines(lines, ContentWidth, ContentHeight, Scale)
+            : _session.ScrollUpLines(lines, ContentWidth, ContentHeight, Scale);
+        if (moved)
+        {
+            ClearSelection();
+            StateChanged?.Invoke();
+            Render();
+        }
+    }
+
     private void ShowContextMenu()
     {
         GetCursorPos(out var screen);
@@ -642,11 +670,18 @@ internal sealed class FloatWindow : IDisposable
 
         int layoutKeyW = (int)Math.Round(dipWidth);
         int layoutKeyH = (int)Math.Round(dipHeight);
-        if (_page is null || layoutKeyW != _layoutWidth || layoutKeyH != _layoutHeight)
+        bool sizeChanged = layoutKeyW != _layoutWidth || layoutKeyH != _layoutHeight;
+        if (_page is null || sizeChanged || _session.Anchor != _laidAnchor)
         {
-            // 重排后保持阅读位置：定位回包含当前锚点文字的页首。
-            _session.JumpToOffset(_session.Anchor, dipWidth, dipHeight, scale);
+            if (sizeChanged)
+            {
+                // 重排后保持阅读位置：定位回包含当前锚点文字的页首。
+                _session.JumpToOffset(_session.Anchor, dipWidth, dipHeight, scale);
+            }
+            // 尺寸不变但锚点已前进/后退（有效翻页或滚动）时也必须重排，
+            // 否则提交的仍是旧页画面。
             _page = Paginator.Layout(_session.Text, _session.Anchor, dipWidth, dipHeight, _session.Settings, scale);
+            _laidAnchor = _session.Anchor;
             _layoutWidth = layoutKeyW;
             _layoutHeight = layoutKeyH;
         }
