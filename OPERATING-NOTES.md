@@ -79,6 +79,11 @@
 - 浅色主题验证：`AppsUseLightTheme=1` + 广播 `WM_SETTINGCHANGE "ImmersiveColorSet"` 立即生效，测完立即还原；标题栏颜色保持不变（2026-11-06 外观轮实测，见 `.run/appearance/`）。
 - 证据：`src/HiddenReader.App/UI/DarkTitleBar.cs`；截图 `.run/appearance/shots/k3/k4-titlebar-lighttheme-*.png`。
 
+### 浮窗内容验证：GDI 截屏 + DWM 缩略图双通道判定（2026-11-06）
+- 适用：验证 `WS_EX_NOREDIRECTIONBITMAP` + DirectComposition 浮窗是否真的在渲染内容；需要区分「截屏盲区」与「渲染为空」时。
+- 关键步骤：①GDI `CopyFromScreen` 截浮窗矩形；②另建宿主 WPF 窗口，`DwmRegisterThumbnail(宿主句柄, 浮窗句柄)` + `DwmUpdateThumbnailProperties`（opacity=255、fVisible，目标矩形自定）后截宿主窗口——缩略图走 DWM 后合成路径，独立于 GDI 屏幕捕获；③两通道都空 = 渲染确实为空，仅 GDI 空 = 截屏盲区。注意 PowerShell P/Invoke 的 out 参数写成 `out long`（`IntPtr` 无法用 `[ref]` 传入）。
+- 限制与现状：本轮实测 35ebbeb 基线的浮窗两通道均为空白，而同日 17:07 在 35ebbeb 之前的构建上 GDI 截屏可截到浮窗内容，疑为 35ebbeb 引入的渲染回归，根因未定位；证据 `.run/menu/shots/f2-thumb.png`（feat/reader-menu）、`f3-master-thumb.png`（master 35ebbeb 对照，worktree 构建于 `.run/master-build`）、`.run/colors/shot-08-float-panel.png`（早前版本可截到）。探针脚本 `.run/menu/probe-thumb.ps1`。
+
 ### 浮窗右键菜单与取色的自动化（2026-11-06，阅读配色轮）
 - 适用：自动化验证浮窗右键菜单项、屏幕取色与配色保存失败场景。
 - 关键步骤：①右键菜单是 `TrackPopupMenu` 原生弹窗，右键后用 `keybd_event` 发 Down 逐项移动（分隔符自动跳过；当前项序：置顶、背景 0/50/100、边框 0/50/100、阅读配色…、返回普通模式、退出——「阅读配色…」需 8 个 Down 后 Enter），菜单项新增时要重数；②配色面板是 WPF 窗口，UIA 可用 x:Name 作为 AutomationId 定位（主窗口在浮窗模式下隐藏，只能从进程窗口枚举里找含 `ConfirmButton` 的窗口）；③取色验证先另起一个独立 PowerShell WinForms 无边框窗口（如 #123456）当已知色块，吸管取样后比对回填色值，截图确认 HUD；④保存失败探测用 `FileShare.None` 独占持有 `library.json`（同 N1 探针手法），点「确定」后用前台 #32770 + Enter 关提示框。

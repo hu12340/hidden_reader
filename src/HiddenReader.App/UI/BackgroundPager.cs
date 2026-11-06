@@ -80,6 +80,9 @@ internal sealed class BackgroundPager : IDisposable
             if (page.End <= start) break;
             start = page.End;
             if (start >= text.Length) break;
+            // 新页首之后只剩空白时不再新增页：否则按页跳转会落到空白页
+            // （与 ReadingSession.ComputePageStarts、ScrollDownLines 的到底判定同一语义）。
+            if (text.AsSpan(start).IsWhiteSpace()) break;
             starts.Add(start);
         }
         return new Result(request.Session, starts, request.Width, request.Height, request.Ppd);

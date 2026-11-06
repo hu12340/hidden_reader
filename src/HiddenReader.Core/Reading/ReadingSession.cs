@@ -176,6 +176,9 @@ public sealed class ReadingSession
             if (page.End <= start) break;
             start = page.End;
             if (start >= Text.Length) break;
+            // 新页首之后只剩空白时不再新增页：否则按页跳转会落到空白页
+            // （与 ScrollDownLines 的到底判定同一语义）。
+            if (Text.AsSpan(start).IsWhiteSpace()) break;
             starts.Add(start);
         }
         return starts;
