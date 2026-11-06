@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         var state = _library.State;
         Width = state.WindowWidth;
         Height = state.WindowHeight;
-        if (state.WindowX < 0 || state.WindowY < 0)
+        if (WindowPlacement.IsUnplaced(state.WindowX, state.WindowY))
         {
             // 首次启动：贴工作区右侧、偏下放置。
             var work = SystemParameters.WorkArea;
@@ -36,8 +36,9 @@ public partial class MainWindow : Window
         }
         else
         {
-            Left = state.WindowX;
-            Top = state.WindowY;
+            // 有效坐标可以为负：左侧/上方显示器的窗口本来就带负坐标。
+            Left = state.WindowX!.Value;
+            Top = state.WindowY!.Value;
         }
 
         Reader.SessionAdvanced += OnReadingAdvanced;
@@ -45,6 +46,12 @@ public partial class MainWindow : Window
         Closing += OnWindowClosing;
         // 放置完成后再挂接状态保存，避免初始化期间把首次定位标志覆盖掉。
         StateChanged += (_, _) => SaveWindowState();
+        // 首次定位立即落盘（此后由 StateChanged 增量保存）。
+        SaveWindowState();
+        // 在物理像素坐标系里核对位置是否仍落在可见工作区
+        // （显示器断开或坐标越界时回退，避免窗口恢复到屏幕外）。
+        WindowPlacement.EnsureWindowVisible(
+            new System.Windows.Interop.WindowInteropHelper(this).Handle);
 
         RefreshBookList(selectId: state.LastBookId);
     }
@@ -54,7 +61,8 @@ public partial class MainWindow : Window
     private void RefreshBookList(string? selectId)
     {
         BookSelector.ItemsSource = _library.State.Books;
-        BookSelector.DisplayMemberPath = nameof(BookInfo.Title);
+        // 显示文本走 BookInfo.ToString()（=Title）；自定义 ComboBox 模板下
+        // DisplayMemberPath 不会作用到条目呈现。
         BookSelector.SelectedItem = _library.State.Books.FirstOrDefault(b => b.Id == selectId);
     }
 
@@ -83,9 +91,19 @@ public partial class MainWindow : Window
         if (MessageBox.Show(this, $"移除《{book.Title}》？\n仅删除软件管理的副本，原文件不受影响。", "HiddenReader",
                 MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK) return;
 
+        bool removed = _library.Remove(book);
+        if (!removed)
+        {
+            // 书架提交失败（Library.Remove 已回滚内存状态）：书架条目、当前正文、
+            // 阅读位置和浮窗全部保持原样，只提示，不刷新列表（避免当前书被重新打开）。
+            MessageBox.Show(this, "书架保存失败，移除已取消。\n当前书籍与阅读位置未受影响，请检查磁盘后重试。",
+                "HiddenReader", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // 提交成功（Remove 返回 true；副本删除失败仅记日志、由启动清理兜底）才走清理路径。
         _float?.Dispose();
         _float = null;
-        _library.Remove(book);
         _currentBook = null;
         _session = null;
         Reader.SetSession(null);
@@ -188,8 +206,20 @@ public partial class MainWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // 方向键翻页仅在主窗口（或阅读视图）持有键盘焦点时生效。
+        // 文本输入控件（搜索框、跳页框）保留系统编辑行为，Ctrl+C 不得拦截。
         if (SearchBox.IsKeyboardFocused || PageBox.IsKeyboardFocused) return;
+
+        // Ctrl+C：阅读视图有焦点且有选区时复制选中正文。
+        if (e.Key == Key.C
+            && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control
+            && Reader.IsKeyboardFocusWithin)
+        {
+            string? selected = Reader.GetSelectedText();
+            if (string.IsNullOrEmpty(selected)) return;
+            try { Clipboard.SetText(selected); } catch { /* 剪贴板被占用时忽略 */ }
+            e.Handled = true;
+            return;
+        }
 
         if (Reader.HandleKey(e.Key))
         {

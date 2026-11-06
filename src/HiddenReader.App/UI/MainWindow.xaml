@@ -57,9 +57,10 @@
                                     </ControlTemplate>
                                 </ToggleButton.Template>
                             </ToggleButton>
-                            <ContentPresenter Content="{TemplateBinding SelectionBoxItem}"
-                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                                              Margin="8,4,24,4" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                            <!-- DisplayMemberPath 不会反映到 SelectionBoxItemTemplate（其为 null），
+                                 直接绑定标题属性，否则闭合状态显示 BookInfo 的类型名。 -->
+                            <TextBlock Text="{Binding SelectionBoxItem.Title, RelativeSource={RelativeSource TemplatedParent}}"
+                                       Margin="8,4,24,4" VerticalAlignment="Center" IsHitTestVisible="False"/>
                             <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False"
                                    PopupAnimation="Fade">
                                 <Border Background="#15161C" BorderBrush="#4A4C58" BorderThickness="1" CornerRadius="2"
@@ -85,7 +86,7 @@
             <StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                     <Button x:Name="ImportButton" Content="导入 TXT" Width="84" Margin="0,0,6,0" Click="OnImport"/>
-                    <ComboBox x:Name="BookSelector" Width="240" DisplayMemberPath="Title" SelectionChanged="OnBookSelected"/>
+                    <ComboBox x:Name="BookSelector" Width="240" SelectionChanged="OnBookSelected"/>
                     <Button x:Name="RemoveButton" Content="移除" Width="60" Margin="6,0,6,0" Click="OnRemove"/>
                     <Button x:Name="FloatButton" Content="极简浮窗" Width="84" Click="OnEnterFloat"/>
                 </StackPanel>

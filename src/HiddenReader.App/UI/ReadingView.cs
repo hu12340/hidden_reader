@@ -137,7 +137,7 @@ public sealed class ReadingView : FrameworkElement
         double distance = Math.Abs(pos.X - _downPoint.X) + Math.Abs(pos.Y - _downPoint.Y);
         if (distance <= 3)
         {
-            // 单击：翻到下一页。
+            // 单击：翻到下一页，同时清除旧选区。
             _selectionAnchor = -1;
             _selectionFocus = -1;
             _session?.NextPage(ActualWidth, ActualHeight, Scale);
@@ -147,8 +147,7 @@ public sealed class ReadingView : FrameworkElement
         }
         else
         {
-            _selectionAnchor = -1;
-            _selectionFocus = -1;
+            // 拖动选字：松手后保留高亮，供 Ctrl+C 复制；不翻页。
             InvalidateVisual();
         }
         e.Handled = true;
@@ -171,6 +170,9 @@ public sealed class ReadingView : FrameworkElement
             default:
                 return false;
         }
+        // 翻页后清除旧选区（选区随页消失，避免残留错误高亮）。
+        _selectionAnchor = -1;
+        _selectionFocus = -1;
         _page = null;
         InvalidateVisual();
         SessionAdvanced?.Invoke();

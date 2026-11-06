@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using HiddenReader.App.Data;
+using HiddenReader.App.UI;
 using HiddenReader.Core.Reading;
 
 namespace HiddenReader.App.Float;
@@ -217,7 +218,7 @@ internal sealed class FloatWindow : IDisposable
         double dipWidth = Math.Max(220, state.Width);
         double dipHeight = Math.Max(140, state.Height);
         double dipX = state.X, dipY = state.Y;
-        if (dipX < 0 || dipY < 0)
+        if (WindowPlacement.IsUnplaced(dipX, dipY))
         {
             // 未放置过：放到工作区右下角。
             var work = SystemParameters.WorkArea;
@@ -228,6 +229,17 @@ internal sealed class FloatWindow : IDisposable
         int y = (int)Math.Round(dipY * scale);
         int w = (int)Math.Round(dipWidth * scale);
         int h = (int)Math.Round(dipHeight * scale);
+
+        // 在物理像素坐标系核对保存位置：显示器断开或坐标越界时，
+        // 回退到最近显示器工作区（有效负坐标不受影响）。
+        var desired = new WindowPlacement.RECT { Left = x, Top = y, Right = x + w, Bottom = y + h };
+        if (WindowPlacement.TryGetWorkAreaForRect(desired, out var workArea)
+            && !WindowPlacement.IsRectVisibleInWorkArea(desired, workArea))
+        {
+            var fallback = WindowPlacement.ClampIntoWorkArea(desired, workArea);
+            Diagnostics.Log($"float position fallback: ({x},{y}) -> ({fallback.Left},{fallback.Top})");
+            x = fallback.Left; y = fallback.Top; w = fallback.Width; h = fallback.Height;
+        }
 
         _hwnd = CreateWindowExW(
             (uint)(WS_EX_TOOLWINDOW | (Topmost ? WS_EX_TOPMOST : 0) | WS_EX_NOREDIRECTIONBITMAP),
@@ -472,14 +484,13 @@ internal sealed class FloatWindow : IDisposable
             int distance = Math.Abs(x - _downX) + Math.Abs(y - _downY);
             if (distance <= 3)
             {
+                // 单击：翻到下一页，同时清除旧选区。
+                _selectionAnchor = -1;
+                _selectionFocus = -1;
                 _session.NextPage(ContentWidth, ContentHeight, Scale);
                 StateChanged?.Invoke();
             }
-            else
-            {
-                _selectionAnchor = -1;
-                _selectionFocus = -1;
-            }
+            // 拖动选字：松手后保留高亮，供 Ctrl+C 复制；不翻页。
             Render();
             return;
         }
@@ -493,12 +504,14 @@ internal sealed class FloatWindow : IDisposable
         {
             case 0x25: // left
             case 0x26: // up
+                ClearSelection();
                 _session.PreviousPage(ContentWidth, ContentHeight, Scale);
                 StateChanged?.Invoke();
                 Render();
                 break;
             case 0x27: // right
             case 0x28: // down
+                ClearSelection();
                 _session.NextPage(ContentWidth, ContentHeight, Scale);
                 StateChanged?.Invoke();
                 Render();
@@ -588,6 +601,14 @@ internal sealed class FloatWindow : IDisposable
         int end = Math.Max(_selectionAnchor, _selectionFocus);
         if (end <= start) return;
         try { Clipboard.SetText(_session.Text[start..end]); } catch { }
+    }
+
+    /// <summary>翻页或换书后清除旧选区，避免残留错误高亮。</summary>
+    private void ClearSelection()
+    {
+        if (_selectionAnchor < 0 && _selectionFocus < 0) return;
+        _selectionAnchor = -1;
+        _selectionFocus = -1;
     }
 
     private double Scale => GetDpiForWindow(_hwnd) / 96.0;
