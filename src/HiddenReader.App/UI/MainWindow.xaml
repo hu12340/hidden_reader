@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:HiddenReader.App.UI"
         Title="HiddenReader"
+        Icon="/Assets/HiddenReader.ico"
         Width="900" Height="640"
         Background="#1E1F26"
         Foreground="#E4E2DC">

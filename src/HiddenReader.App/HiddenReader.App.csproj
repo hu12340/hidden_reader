@@ -10,7 +10,12 @@
     <AssemblyName>HiddenReader</AssemblyName>
     <RootNamespace>HiddenReader.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\HiddenReader.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\HiddenReader.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\HiddenReader.Core\HiddenReader.Core.csproj" />

@@ -73,7 +73,9 @@ public sealed class ReadingView : FrameworkElement
         int linesPerNotch = WheelInput.LinesPerNotch();
         // 上限防止「一次滚动多屏」的滚轮把读者甩出视野。
         int lines = Math.Clamp(Math.Abs(notches) * linesPerNotch, 1, 30);
-        bool moved = notches > 0
+        // 滚轮符号约定（与浮窗一致）：正值 = 远离自己，负值 = 朝自己。
+        // 朝自己拨（负增量）要看到后文、文字上移，所以负增量走 ScrollDownLines。
+        bool moved = notches < 0
             ? _session.ScrollDownLines(lines, ActualWidth, ActualHeight, Scale)
             : _session.ScrollUpLines(lines, ActualWidth, ActualHeight, Scale);
         if (moved)
@@ -88,7 +90,8 @@ public sealed class ReadingView : FrameworkElement
         e.Handled = true;
     }
 
-    private static readonly Brush PageBackground = FreezeBrush(new SolidColorBrush(Color.FromRgb(0x1E, 0x1F, 0x26)));
+    // 正文底色纯黑（需求第 7 节）：普通窗口与极简浮窗一致，不随主题变化。
+    private static readonly Brush PageBackground = FreezeBrush(new SolidColorBrush(Colors.Black));
 
     private static Brush FreezeBrush(Brush brush)
     {

@@ -6,6 +6,8 @@
 
 选用 **C#、.NET 10 LTS 和 WPF**。首版只面向 Windows 11，WPF 可承担书架、目录、搜索和设置界面，也提供正文排版所需的 `TextFormatter`。普通窗口和极简浮窗共享当前小说、阅读位置、分页与翻页命令，窗口置顶、缩放热区和鼠标输入由各自的窗口处理。 [.NET 支持策略](https://dotnet.microsoft.com/en-us/platform/support/policy) · [WPF 窗口](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/windows/) · [WPF 文本排版](https://learn.microsoft.com/en-us/dotnet/api/system.windows.media.textformatting.textformatter?view=windowsdesktop-10.0)
 
+**窗口外观**。普通窗口保留系统标题栏，在获得窗口句柄后通过 Windows 11 DWM 设置标题栏背景和文字颜色。显式设置颜色使应用在系统使用浅色主题时也能显示深色标题栏，按窗口激活状态调整文字亮度。可执行文件和 WPF 普通窗口引用同一个多尺寸 `.ico`。普通窗口的正文视图绘制纯黑底色，浮窗的 DirectComposition 渲染使用纯黑 RGB 和已有背景不透明度作为 Alpha。 [Windows DWM 窗口属性](https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute)
+
 ## 浮窗原型
 
 先用固定的两页中文正文制作独立浮窗原型。WPF 的 `AllowsTransparency` 使用分层窗口，Windows 会让零 Alpha 区域的鼠标消息穿透。因此用 WPF 无边框窗口验证基本显示和输入，再针对完全透明的缩放热区验证非分层的 Win32 窗口与 DirectComposition。后者让合成层负责显示，由窗口处理鼠标命中，并通过 `WM_NCHITTEST` 定义边缘和角落的缩放热区。浮窗采用在 Windows 11 上通过以下验证的实现。 [WPF 透明窗口](https://learn.microsoft.com/en-us/troubleshoot/developer/dotnet/framework/general/wpf-render-thread-failures) · [Win32 分层窗口](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows) · [Windows 合成窗口示例](https://learn.microsoft.com/en-us/archive/msdn-magazine/2014/june/windows-with-c-high-performance-window-layering-using-the-windows-composition-engine) · [自定义窗口边框与命中测试](https://learn.microsoft.com/en-us/windows/win32/dwm/customframe#enabling-hit-testing-for-the-custom-frame)
@@ -23,6 +25,8 @@
 ## 正文定位与分页
 
 用每本书的有效编码解码 TXT 副本，将换行统一为 `\n`，得到供章节识别、搜索和排版共用的正文。统一用 **正文中的 UTF-16 偏移量**定位。目录记录标题起点，搜索结果记录命中起点和长度，阅读进度记录当前阅读锚点。
+
+WPF 和 Win32 的滚轮增量采用相同的符号约定。两个窗口都在输入层将负增量映射为向后文滚动，将正增量映射为向前文滚动，并调用共享的阅读会话移动正文锚点。 [Windows 滚轮消息](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-mousewheel)
 
 **锚点与滚动**。锚点是可视区第一行的正文偏移：翻页后为页首，滚轮滚动后可以是任意行首（可停在两页边界之间）。行断点只由段落文本和可用宽度决定，与页边界无关，因此从任意行首排版都能得到与整页排版一致的后续行。普通翻页从当前可视位置排版一整屏推进（`NextPage`），或回退一屏的行数（`PreviousPage`，通过 `Paginator.CollectLineStartsBefore` 收集锚点之前的行首）；滚轮按系统「每格滚动的行数」设置连续移动行首，显示到正文末尾后到底。锚点始终是行首，持久化与恢复直接按该偏移渲染；若恢复时的布局与保存时不同，先经 `Paginator.FindPageStartContaining` 定位回包含锚点的页首，保证锚点文字仍在视野内。
 

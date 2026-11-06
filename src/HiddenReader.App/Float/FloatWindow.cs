@@ -557,7 +557,8 @@ internal sealed class FloatWindow : IDisposable
         if (notches == 0) return;
         int linesPerNotch = WheelInput.LinesPerNotch();
         int lines = Math.Clamp(Math.Abs(notches) * linesPerNotch, 1, 30);
-        bool moved = notches > 0
+        // 与普通窗口同一符号约定：负增量（朝自己）看到后文、文字上移。
+        bool moved = notches < 0
             ? _session.ScrollDownLines(lines, ContentWidth, ContentHeight, Scale)
             : _session.ScrollUpLines(lines, ContentWidth, ContentHeight, Scale);
         if (moved)
@@ -703,7 +704,9 @@ internal sealed class FloatWindow : IDisposable
     {
         var page = _page ?? Paginator.Layout(_session.Text, _session.Anchor, width, height, _session.Settings, Scale);
 
-        var background = Color.FromArgb((byte)Math.Round(BackgroundOpacity * 255), 0x1E, 0x1F, 0x26);
+        // 正文底色纯黑（需求第 7 节）：RGB 固定为 #000000，只有背景不透明度进 Alpha，
+        // 因此 100% 为纯黑、50% 为半透明黑、0% 完全透出后方画面；文字与边框的不透明度各自独立。
+        var background = Color.FromArgb((byte)Math.Round(BackgroundOpacity * 255), 0, 0, 0);
         if (background.A > 0)
         {
             dc.DrawRectangle(new SolidColorBrush(background), null, new Rect(0, 0, width, height));

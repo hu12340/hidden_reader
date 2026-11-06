@@ -59,3 +59,22 @@
 - 事实：`HKCU\Control Panel\Desktop\PerMonitorSettings\<monitor>\DpiValue` 写入 + `WM_SETTINGCHANGE` 广播后 `GetDpiForSystem` 不变（需注销或经系统设置更改）。2026-11-05 实测：DpiValue=2 后系统 DPI 仍 96，已回滚。
 - 建议：150% 场景请用户手动切换缩放后再跑脚本；脚本用 `GetDpiForWindow` 自证当前 DPI。
 - 影响范围：仅改注册表值，回滚即无副作用；不涉及显示驱动。
+
+### PowerShell 5.1 的 BinaryWriter.Write 会把 byte[] 重载解析成 Write(bool)
+- 适用：PowerShell 手工拼二进制文件（如 .ico 装配）时。
+- 症状：`$bw.Write($byteArray)` 每个数组只写入 1 个 0x01 字节——绑定到了 `Write(bool)`，非空数组被转为 true。
+- 关键步骤：显式写 `$bw.Write([byte[]]$array)`。
+- 证据：`tools/Make-Icon.ps1`（修复后 ico 50300 字节）；修复前仅 159 字节，2026-11-06 外观轮实测。
+
+### SetCursorPos 在屏幕边缘被截停，边缘缩放自动化须先把窗口移离屏幕边
+- 适用：对贴边窗口做 `gui.ps1` 边缘缩放自动化。
+- 症状：从右边缘向外拖 80px 实测窗口只增大 27–40px，误判为应用缺陷；`Move-CursorVerified` 返回的目标坐标永远是屏幕右缘-1。
+- 关键步骤：缩放测试前先 Ctrl+左键把浮窗拖离屏幕边缘，再取边缘坐标；或改拖不贴屏幕的那条边。
+- 证据：`.run/appearance/resize-diag3.ps1`（cursorX 恒为 3439 = 屏幕右缘-1）；`test2-float.ps1` 移窗后 80px 全量生效。
+
+### DWM 标题栏文字颜色切换需 SWP_FRAMECHANGED 才立即重绘
+- 适用：用 `DWMWA_TEXT_COLOR`（36）做激活/失焦标题文字变暗时。
+- 事实：只调 `DwmSetWindowAttribute` 不触发非客户区重绘，颜色变更不生效；补一次 `SetWindowPos(SWP_FRAMECHANGED|NOMOVE|NOSIZE|NOZORDER|NOACTIVATE)` 后立即生效。
+- 关键步骤：激活 #E4E2DC / 失焦 #A8A6A0（本轮实测值），背景 `DWMWA_CAPTION_COLOR`(35) + `DWMWA_USE_IMMERSIVE_DARK_MODE`(20) 固定深色。
+- 浅色主题验证：`AppsUseLightTheme=1` + 广播 `WM_SETTINGCHANGE "ImmersiveColorSet"` 立即生效，测完立即还原；标题栏颜色保持不变（2026-11-06 外观轮实测，见 `.run/appearance/`）。
+- 证据：`src/HiddenReader.App/UI/DarkTitleBar.cs`；截图 `.run/appearance/shots/k3/k4-titlebar-lighttheme-*.png`。

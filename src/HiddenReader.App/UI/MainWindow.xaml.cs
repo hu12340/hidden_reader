@@ -25,6 +25,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        // 标题栏在句柄就绪后由 DWM 着色：系统浅色主题下也保持深色，并随焦点调整文字亮度。
+        DarkTitleBar.Attach(this);
         // 分页结果回调统一封送回 UI 线程。
         _pager = new BackgroundPager(result => Dispatcher.BeginInvoke(() => ApplyPageStarts(result)));
         Loaded += OnLoaded;
