@@ -23,6 +23,13 @@ public sealed class ReadingView : FrameworkElement
     public event Action? SessionAdvanced;
     /// <summary>视图尺寸变化（重排保持位置后触发），宿主据此重新请求后台全书分页。</summary>
     public event Action? LayoutSizeChanged;
+    /// <summary>
+    /// 下一次尺寸变化不做「包含该段的页首」对齐（宿主在目录/搜索栏开合前设置）。
+    /// 这类浮层只增减一行高度，而页首对齐会把锚点移到新布局的页首：
+    /// 小书上一次对齐就可能跨过整页边界，把阅读位置甩回书首。
+    /// 锚点本身就是可视顶行的偏移，浮层开合时直接沿用即满足「正文锚点仍可见」。
+    /// </summary>
+    public bool PreserveAnchorOnNextResize { get; set; }
 
     public ReadingView()
     {
@@ -71,7 +78,12 @@ public sealed class ReadingView : FrameworkElement
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
     {
         base.OnRenderSizeChanged(sizeInfo);
-        if (_session is not null && sizeInfo.NewSize.Width > 1 && sizeInfo.NewSize.Height > 1)
+        if (PreserveAnchorOnNextResize)
+        {
+            // 浮层开合引起的尺寸变化：保留锚点原值，只按新尺寸重排。
+            PreserveAnchorOnNextResize = false;
+        }
+        else if (_session is not null && sizeInfo.NewSize.Width > 1 && sizeInfo.NewSize.Height > 1)
         {
             double ppd = Scale;
             // 重排后保持阅读位置。

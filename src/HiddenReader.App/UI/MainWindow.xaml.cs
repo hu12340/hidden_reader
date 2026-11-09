@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using HiddenReader.App.Data;
 using HiddenReader.App.Float;
 using HiddenReader.Core.Reading;
@@ -176,7 +177,8 @@ public partial class MainWindow : Window
         SetPageNavEnabled(false);
         try
         {
-            var book = _library.Import(dialog.FileName);
+            // 副本复制在后台线程执行，避免大文件/慢磁盘冻结 UI（技术方案 §39）。
+            var book = await Task.Run(() => _library.Import(dialog.FileName));
             if (_busy)
             {
                 RefreshShelf();
@@ -244,7 +246,13 @@ public partial class MainWindow : Window
             }
             else
             {
-                PageLabel.Text = "从「文件」导入 TXT 小说";
+                // 空书架：清掉旧书残留的目录面板与章节列表，页码/翻页按钮由
+                // UpdateStatusLabel 的无会话分支统一重置（含「从文件导入」提示）。
+                _chapters = new List<ChapterInfo>();
+                TocPanel.Visibility = Visibility.Collapsed;
+                TocCheck.Visibility = Visibility.Collapsed;
+                if (FindBarRow.Visibility == Visibility.Visible) CloseFindbar();
+                UpdateStatusLabel();
             }
         }
         else
@@ -525,6 +533,9 @@ public partial class MainWindow : Window
 
     private void ToggleToc()
     {
+        // 目录面板改变 Reader 宽度（重新换行）：与搜索栏同理保留锚点原值。
+        Reader.PreserveAnchorOnNextResize = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => Reader.PreserveAnchorOnNextResize = false));
         if (TocPanel.Visibility == Visibility.Visible)
         {
             TocPanel.Visibility = Visibility.Collapsed;
@@ -561,7 +572,10 @@ public partial class MainWindow : Window
 
     private void OpenFindbar()
     {
+        // 搜索栏改变 Reader 高度：保留锚点原值，避免页首对齐把阅读位置甩过页边界。
+        Reader.PreserveAnchorOnNextResize = true;
         FindBarRow.Visibility = Visibility.Visible;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => Reader.PreserveAnchorOnNextResize = false));
         SearchBox.Focus();
         SearchBox.SelectAll();
     }
@@ -570,7 +584,10 @@ public partial class MainWindow : Window
 
     private void CloseFindbar()
     {
+        // 同 OpenFindbar：收起搜索栏时显式保留锚点（Esc 路径也走这里）。
+        Reader.PreserveAnchorOnNextResize = true;
         FindBarRow.Visibility = Visibility.Collapsed;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => Reader.PreserveAnchorOnNextResize = false));
         SearchBox.Clear();
         if (_session is not null)
         {
@@ -752,6 +769,8 @@ public partial class MainWindow : Window
 
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        // 记录关闭来源便于排查：主动退出、浮窗返回还是外部 WM_CLOSE。
+        Diagnostics.Log($"main window closing (exitingFromFloat={_exitingFromFloat})");
         SaveProgress();
         if (_currentBook is not null && _float is not null)
         {
