@@ -237,21 +237,16 @@
     <Grid>
     <Border x:Name="RootBorder" Background="#1E1F26">
         <DockPanel>
-            <!-- 顶部栏：应用图标 + 书页/眼睛/齿轮/问号/极简浮窗五个图标入口 + 窗口按钮 -->
+            <!-- 顶部栏：蓝底书页兼作书架入口，其后是查看、设置、帮助、极简浮窗和窗口按钮。 -->
             <Border DockPanel.Dock="Top" Height="44" Background="#1E1F26"
                     BorderBrush="#303641" BorderThickness="0,0,0,1">
                 <DockPanel LastChildFill="False">
-                    <!-- 应用图标（装饰，不参与命中拖动之外的行为） -->
-                    <Border Width="23" Height="23" CornerRadius="5" Background="#354D76"
-                            VerticalAlignment="Center" Margin="12,0,12,0">
-                        <Path Data="{StaticResource BookIcon}" Style="{StaticResource GlyphIcon}"
-                              Stroke="#D8E8FF" Width="14" Height="14"/>
-                    </Border>
-                    <!-- 左侧图标组：书页、眼睛、齿轮、问号、极简浮窗（顺序与原型一致） -->
-                    <Button x:Name="BookButton" DockPanel.Dock="Left" Width="32" Padding="0"
+                    <Button x:Name="BookButton" DockPanel.Dock="Left" Width="32" Padding="0" Margin="8,0,0,0"
                             Style="{StaticResource TopBarButton}" Click="OnFileMenuClick"
                             ToolTip="书架与导入" AutomationProperties.Name="书架与导入">
-                        <Path Data="{StaticResource BookIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                        <Border Width="23" Height="23" CornerRadius="5" Background="#354D76">
+                            <Path Data="{StaticResource BookIcon}" Style="{StaticResource GlyphIcon}" Stroke="#D8E8FF"/>
+                        </Border>
                     </Button>
                     <Button x:Name="EyeButton" DockPanel.Dock="Left" Width="32" Padding="0"
                             Style="{StaticResource TopBarButton}" Click="OnViewMenuClick"
