@@ -112,7 +112,6 @@
     .window-controls, .masthead .badge { display: none; }
     .flyout { width: min(282px, calc(100vw - 46px)); }
     .compact-menu { width: 164px; }
-    .help-menu { left: auto; right: 0; }
     .leaf { padding-inline: 17px; }
     .prose { font-size: 15px; }
   }
@@ -166,7 +165,6 @@
             <button class="command" id="searchButton"><svg class="icon" aria-hidden="true"><use href="#search"/></svg>搜索 <kbd>Ctrl+F</kbd></button>
           </section>
         </div>
-        <button class="menu-trigger" id="floatButton" title="极简浮窗" aria-label="极简浮窗"><svg class="icon" aria-hidden="true"><use href="#float"/></svg></button>
         <div class="menu-anchor">
           <button class="menu-trigger" id="settingsButton" title="设置" aria-label="设置" aria-expanded="false" aria-controls="settingsMenu"><svg class="icon" aria-hidden="true"><use href="#gear"/></svg></button>
           <section class="flyout compact-menu" id="settingsMenu" aria-label="设置" hidden>
@@ -175,11 +173,12 @@
         </div>
         <div class="menu-anchor">
           <button class="menu-trigger" id="helpButton" title="帮助" aria-label="帮助" aria-expanded="false" aria-controls="helpMenu"><svg class="icon" aria-hidden="true"><use href="#help"/></svg></button>
-          <section class="flyout compact-menu help-menu" id="helpMenu" aria-label="帮助" hidden>
+          <section class="flyout compact-menu" id="helpMenu" aria-label="帮助" hidden>
             <button class="command" id="guideButton"><svg class="icon" aria-hidden="true"><use href="#book"/></svg>快速上手…</button>
             <button class="command" id="shortcutsButton"><svg class="icon" aria-hidden="true"><use href="#keyboard"/></svg>键盘快捷键…</button>
           </section>
         </div>
+        <button class="menu-trigger" id="floatButton" title="极简浮窗" aria-label="极简浮窗"><svg class="icon" aria-hidden="true"><use href="#float"/></svg></button>
       </nav>
       <div class="window-controls" aria-hidden="true"><svg class="icon"><use href="#min"/></svg><svg class="icon"><use href="#max"/></svg><svg class="icon"><use href="#close"/></svg></div>
     </header>
@@ -254,7 +253,7 @@
     <dl class="guide">
       <dt>打开小说</dt><dd>点左上角的书页图标导入 TXT，或从书架选择小说。</dd>
       <dt>查找正文</dt><dd>点眼睛图标打开目录或搜索，点齿轮可调整阅读配色。</dd>
-      <dt>极简浮窗</dt><dd>点浮窗图标切到只显示正文的视图。用滚轮阅读，按 Esc 返回普通模式。</dd>
+      <dt>极简浮窗</dt><dd>点最右侧的浮窗图标进入极简模式。用滚轮阅读，按 <kbd>Esc</kbd> 返回普通模式。在桌面版中，按住 <kbd>Ctrl</kbd>，在正文区按住鼠标左键拖动即可移动浮窗。</dd>
     </dl>
     <div class="dialog-actions"><button class="action primary">关闭</button></div>
   </form>
