@@ -1,0 +1,50 @@
+<Window x:Class="HiddenReader.App.UI.ReadingFontSizeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="正文字号" Width="330" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="#232A35" Foreground="#E4E2DC"
+        FocusManager.FocusedElement="{Binding ElementName=FontSizeSlider}">
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#333E50"/>
+            <Setter Property="Foreground" Value="#E4E2DC"/>
+            <Setter Property="BorderBrush" Value="#465468"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="MinHeight" Value="32"/>
+        </Style>
+    </Window.Resources>
+    <StackPanel Margin="18,16,18,18">
+        <TextBlock Text="实时预览，普通窗口和浮窗共用。" Foreground="#B6C1D0"/>
+        <DockPanel Margin="0,12,0,2" LastChildFill="False">
+            <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Text="字号" Foreground="#B6C1D0"/>
+            <TextBlock x:Name="SizeValue" DockPanel.Dock="Right" FontSize="20" Foreground="#9BC4FF"/>
+        </DockPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="32"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="32"/>
+            </Grid.ColumnDefinitions>
+            <Button x:Name="DecreaseButton" Padding="0" FontSize="16"
+                    Content="−" AutomationProperties.Name="减小字号" Click="OnDecrease"/>
+            <Slider x:Name="FontSizeSlider" Grid.Column="1" Margin="8,0" VerticalAlignment="Center"
+                    IsSnapToTickEnabled="True" TickFrequency="1" SmallChange="1" LargeChange="1"
+                    IsMoveToPointEnabled="True" AutomationProperties.Name="正文字号"/>
+            <Button x:Name="IncreaseButton" Grid.Column="2" Padding="0" FontSize="16"
+                    Content="+" AutomationProperties.Name="增大字号" Click="OnIncrease"/>
+        </Grid>
+        <DockPanel Margin="40,2,40,0" LastChildFill="False" TextBlock.Foreground="#9BA7B8">
+            <TextBlock DockPanel.Dock="Left" Text="{Binding Minimum, ElementName=FontSizeSlider}"/>
+            <TextBlock DockPanel.Dock="Right" Text="{Binding Maximum, ElementName=FontSizeSlider}"/>
+        </DockPanel>
+        <DockPanel Margin="0,16,0,0" LastChildFill="False">
+            <Button x:Name="RestoreButton" DockPanel.Dock="Left" Content="恢复默认" Click="OnRestoreDefaults"/>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="CancelButton" Width="56" Margin="0,0,8,0" Content="取消" IsCancel="True"/>
+                <Button x:Name="ConfirmButton" Width="56" Content="确定" IsDefault="True"
+                        Background="#A3C8FF" Foreground="#162133" Click="OnConfirm"/>
+            </StackPanel>
+        </DockPanel>
+    </StackPanel>
+</Window>

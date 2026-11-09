@@ -22,9 +22,9 @@ public sealed class ReadingSession
     public int ActiveSearchHit { get; set; } = -1;
 
     // 全书分页结果缓存：由后台分页线程（大书）或按需同步计算（小书）填充。
-    // 键为产生该结果的布局尺寸，窗口缩放后由调用方重新请求。
+    // 页首还取决于字号，同尺寸下调节字号也要重新分页。
     private IReadOnlyList<int>? _cachedStarts;
-    private (double W, double H, double Ppd)? _cachedKey;
+    private (double W, double H, double Ppd, double FontSize)? _cachedKey;
 
     public ReadingSession(string text)
     {
@@ -35,12 +35,12 @@ public sealed class ReadingSession
     public void SetPageStarts(IReadOnlyList<int> starts, double width, double height, double ppd)
     {
         _cachedStarts = starts;
-        _cachedKey = (width, height, ppd);
+        _cachedKey = (width, height, ppd, Settings.FontSize);
     }
 
     /// <summary>当前布局的总页数是否已经算好。</summary>
     public bool HasPageStarts(double width, double height, double ppd)
-        => _cachedStarts is not null && _cachedKey == (width, height, ppd);
+        => _cachedStarts is not null && _cachedKey == (width, height, ppd, Settings.FontSize);
 
     /// <summary>已算好的总页数；未算好时返回 0（界面此时显示阅读百分比）。</summary>
     public int CachedPageCount => _cachedStarts?.Count ?? 0;

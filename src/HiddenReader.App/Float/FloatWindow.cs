@@ -43,6 +43,7 @@ internal sealed class FloatWindow : IDisposable
     private const int ID_BORDER_50 = 121;
     private const int ID_BORDER_100 = 122;
     private const int ID_COLORS = 125;
+    private const int ID_FONT_SIZE = 126;
     private const int ID_NORMAL = 130;
     private const int ID_EXIT = 140;
 
@@ -120,6 +121,9 @@ internal sealed class FloatWindow : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hwnd, int cmd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
 
     [DllImport("user32.dll")]
     private static extern bool SetFocus(IntPtr hwnd);
@@ -212,6 +216,7 @@ internal sealed class FloatWindow : IDisposable
     public event Action? StateChanged;
     /// <summary>右键菜单请求打开阅读配色面板：宿主以浮窗为宿主窗口打开同一个面板。</summary>
     public event Action? ReadingColorsRequested;
+    public event Action? ReadingFontSizeRequested;
 
     public IntPtr Handle => _hwnd;
 
@@ -297,6 +302,12 @@ internal sealed class FloatWindow : IDisposable
     }
 
     public void Hide() => ShowWindow(_hwnd, SW_HIDE);
+
+    public void Relayout()
+    {
+        _page = null;
+        if (IsWindowVisible(_hwnd)) Render();
+    }
 
     private void ApplyTopmost()
     {
@@ -610,6 +621,7 @@ internal sealed class FloatWindow : IDisposable
             AppendMenuW(menu, MF_STRING | (BorderOpacity >= 0.99 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BORDER_100), "边框不透明度 100%");
             AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, string.Empty);
             AppendMenuW(menu, MF_STRING, new IntPtr(ID_COLORS), "阅读配色…");
+            AppendMenuW(menu, MF_STRING, new IntPtr(ID_FONT_SIZE), "正文字号…");
             AppendMenuW(menu, MF_STRING, new IntPtr(ID_NORMAL), "返回普通模式");
             AppendMenuW(menu, MF_STRING, new IntPtr(ID_EXIT), "退出");
 
@@ -639,6 +651,9 @@ internal sealed class FloatWindow : IDisposable
             case ID_BORDER_100: BorderOpacity = 1; break;
             case ID_COLORS:
                 ReadingColorsRequested?.Invoke();
+                return;
+            case ID_FONT_SIZE:
+                ReadingFontSizeRequested?.Invoke();
                 return;
             case ID_NORMAL:
                 ReturnToNormalRequested?.Invoke();

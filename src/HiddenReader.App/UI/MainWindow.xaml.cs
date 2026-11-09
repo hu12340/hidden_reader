@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using HiddenReader.App.Data;
@@ -19,6 +20,8 @@ public partial class MainWindow : Window
     private BookInfo? _currentBook;
     private List<ChapterInfo> _chapters = new();
     private FloatWindow? _float;
+    private int _readingFontSize;
+    private ReadingFontSizeWindow? _fontSizePanel;
     /// <summary>导入/打开期间为真：状态栏显示阶段文字，期间不刷新页码。</summary>
     private bool _busy;
     /// <summary>开书序号：切换书籍或重复选择时使旧的异步结果作废。</summary>
@@ -29,6 +32,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         // 应用级阅读配色先于任何绘制载入：旧状态缺少颜色字段时使用默认值。
         ReadingColors.Load(_library.State);
+        _readingFontSize = _library.State.ReadingFontSize;
         // 标题栏在句柄就绪后由 DWM 着色：系统浅色主题下也保持深色，并随焦点调整文字亮度。
         // 顶部栏改为客户区自绘后，DWM 标题栏不再可见；保留着色使窗口边缘细节保持深色。
         DarkTitleBar.Attach(this);
@@ -127,20 +131,21 @@ public partial class MainWindow : Window
         popup.IsOpen = !wasOpen;
     }
 
-    /// <summary>窗口客户区内的点击：点在触发图标上交给 Click 切换；点在其他任何位置收起全部弹层。
-    /// 弹层内容在独立 hwnd 中，不会路由到本窗口，因此弹层内部点击不受影响。</summary>
+    /// <summary>点在触发图标或菜单内时保留弹层，让对应的 Click 先处理。</summary>
     private void OnWindowPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.OriginalSource is DependencyObject src && IsMenuTriggerAncestor(src)) return;
+        if (e.OriginalSource is DependencyObject src && IsWithinMenu(src)) return;
         CloseMenus();
     }
 
-    private bool IsMenuTriggerAncestor(DependencyObject src)
+    private bool IsWithinMenu(DependencyObject src)
     {
         for (DependencyObject? d = src; d != null; d = (d is System.Windows.Media.Visual v) ? VisualTreeHelper.GetParent(v) : null)
         {
             if (ReferenceEquals(d, BookButton) || ReferenceEquals(d, EyeButton)
-                || ReferenceEquals(d, GearButton) || ReferenceEquals(d, HelpButton)) return true;
+                || ReferenceEquals(d, GearButton) || ReferenceEquals(d, HelpButton)
+                || ReferenceEquals(d, FileMenuPopup.Child) || ReferenceEquals(d, ViewMenuPopup.Child)
+                || ReferenceEquals(d, SettingsMenuPopup.Child) || ReferenceEquals(d, HelpMenuPopup.Child)) return true;
         }
         return false;
     }
@@ -322,6 +327,7 @@ public partial class MainWindow : Window
             // 正文解码完成即显示并可阅读：单页排版只依赖锚点，不等章节识别与全书分页。
             _currentBook = book;
             _session = new ReadingSession(text);
+            _session.Settings.FontSize = _readingFontSize;
             var bookState = _library.GetBookState(book.Id);
             _session.Anchor = Math.Clamp(bookState.Anchor, 0, text.Length);
             Reader.SetSession(_session);
@@ -373,9 +379,9 @@ public partial class MainWindow : Window
 
     private void ApplyPageStarts(BackgroundPager.Result result)
     {
-        // 会话已被替换（切书）或布局尺寸已变化（缩放）的过期结果直接丢弃。
-        if (_session != result.Session) return;
-        if (_session is null || Reader.ActualWidth < 2 || Reader.ActualHeight < 2) return;
+        // 切书、缩放或滑块预览后，过期结果不能覆盖当前字号的页码。
+        if (_session is null || _session != result.Session || _session.Settings.FontSize != result.FontSize) return;
+        if (Reader.ActualWidth < 2 || Reader.ActualHeight < 2) return;
         double ppd = VisualTreeHelper.GetDpi(Reader).DpiScaleX;
         if (Reader.ActualWidth != result.Width || Reader.ActualHeight != result.Height
             || Math.Abs(ppd - result.Ppd) > 0.001) return;
@@ -751,6 +757,7 @@ public partial class MainWindow : Window
         if (_currentBook is null || _session is null) return;
         // 面板不能挂在即将隐藏的宿主上：切模式前先取消预览。
         CloseReadingColorsPanel();
+        _fontSizePanel?.Close();
         SaveProgress();
 
         if (_float is null)
@@ -761,6 +768,7 @@ public partial class MainWindow : Window
             _float.ExitRequested += OnExitFromFloat;
             _float.StateChanged += OnFloatStateChanged;
             _float.ReadingColorsRequested += OpenReadingColorsPanel;
+            _float.ReadingFontSizeRequested += OpenReadingFontSizePanel;
         }
         _float.Show();
         Hide();
@@ -897,6 +905,71 @@ public partial class MainWindow : Window
         if (_colorsPanel is null) return;
         _colorsPanel.Close(); // 未「确定」的关闭按「取消」处理，恢复打开面板前的配色
         _colorsPanel = null;
+    }
+
+    // ---------- 正文字号 ----------
+
+    private void OnOpenReadingFontSize(object sender, RoutedEventArgs e)
+    {
+        CloseMenus();
+        OpenReadingFontSizePanel();
+    }
+
+    private void OpenReadingFontSizePanel()
+    {
+        var floatOwner = IsVisible ? null : _float;
+        var panel = new ReadingFontSizeWindow(_readingFontSize, ApplyReadingFontSize, CommitReadingFontSize);
+        var interop = new WindowInteropHelper(panel);
+        IntPtr ownerHandle;
+        if (floatOwner is not null)
+        {
+            ownerHandle = floatOwner.Handle;
+            interop.Owner = ownerHandle;
+            panel.Topmost = floatOwner.Topmost;
+        }
+        else
+        {
+            panel.Owner = this;
+            ownerHandle = new WindowInteropHelper(this).Handle;
+        }
+
+        panel.ContentRendered += (_, _) => WindowPlacement.PlaceReadingPanel(interop.Handle, ownerHandle, avoidOwner: floatOwner is not null);
+        _fontSizePanel = panel;
+        try { panel.ShowDialog(); }
+        finally { _fontSizePanel = null; }
+        if (floatOwner is null && IsVisible) GearButton.Focus();
+    }
+
+    private void ApplyReadingFontSize(int size)
+    {
+        if (_readingFontSize == size) return;
+        _readingFontSize = size;
+        if (_session is null) return;
+
+        var settings = _session.Settings.Clone();
+        settings.FontSize = size;
+        _session.Settings = settings;
+        // 从同一个正文偏移量重新换行。逐次对齐页首会让拖动滑块时的阅读位置不断回退。
+        Reader.Relayout();
+        _float?.Relayout();
+        RequestPagination();
+        UpdateStatusLabel();
+    }
+
+    private bool CommitReadingFontSize(int size)
+    {
+        var state = _library.State;
+        int previous = state.ReadingFontSize;
+        state.ReadingFontSize = size;
+        if (_library.Save())
+        {
+            ApplyReadingFontSize(size);
+            return true;
+        }
+
+        state.ReadingFontSize = previous;
+        ApplyReadingFontSize(previous);
+        return false;
     }
 
     /// <summary>启动时若上次以浮窗退出，直接恢复浮窗。</summary>

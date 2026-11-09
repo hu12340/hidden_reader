@@ -8,8 +8,12 @@ namespace HiddenReader.Core.Reading;
 /// </summary>
 public sealed class TextSettings
 {
+    public const int DefaultFontSize = 18;
+    public const int MinimumFontSize = 12;
+    public const int MaximumFontSize = 36;
+
     public string FontFamily { get; set; } = "Microsoft YaHei UI";
-    public double FontSize { get; set; } = 18;
+    public double FontSize { get; set; } = DefaultFontSize;
     public double LineHeightFactor { get; set; } = 1.75;
     public double Padding { get; set; } = 14;
 

@@ -106,9 +106,31 @@ internal static class WindowPlacement
         return true;
     }
 
+    /// <summary>面板放在宿主所在屏幕的右下角。若会挡住浮窗正文，优先放到浮窗旁边。</summary>
+    public static void PlaceReadingPanel(IntPtr panel, IntPtr owner, bool avoidOwner)
+    {
+        if (!GetWindowRect(owner, out var ownerRect) || !TryGetWorkAreaForRect(ownerRect, out var workArea)
+            || !GetWindowRect(panel, out var panelRect)) return;
+
+        int margin = (int)Math.Round(16 * GetDpiForWindow(panel) / 96.0);
+        int x = Math.Max(workArea.Left + margin, workArea.Right - panelRect.Width - margin);
+        int y = Math.Max(workArea.Top + margin, workArea.Bottom - panelRect.Height - margin);
+        if (avoidOwner && x < ownerRect.Right && x + panelRect.Width > ownerRect.Left
+            && y < ownerRect.Bottom && y + panelRect.Height > ownerRect.Top)
+        {
+            int leftOfOwner = ownerRect.Left - panelRect.Width - margin;
+            int aboveOwner = ownerRect.Top - panelRect.Height - margin;
+            if (leftOfOwner >= workArea.Left + margin) x = leftOfOwner;
+            else if (aboveOwner >= workArea.Top + margin) y = aboveOwner;
+        }
+
+        SetWindowPos(panel, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
 
+    private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
 
