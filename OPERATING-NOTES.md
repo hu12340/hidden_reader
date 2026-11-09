@@ -4,6 +4,11 @@
 
 ## 测试与自动化
 
+### 默认输出被运行实例占用时独立构建（2026-11-09）
+- 适用：构建报告 `MSB3027` / `MSB3021`，且锁定 DLL 的进程不归本轮所有。
+- 用 `dotnet build src/HiddenReader.App/HiddenReader.App.csproj -o <本轮绝对路径>/build` 生成独立可执行文件。用本轮 `HR_DATA_DIR` 和 `HR_LOG_DIR` 启动该文件，结束时先核对进程路径和 PID 再清理测试实例。
+- 证据：`.run/font-size-app-5673f6bf/build/`（字号轮使用独立输出，构建成功）。
+
 ### 启动清理白名单（2026-11-06 起，「先构造再放样例」的限制已失效；N3/N4 修订）
 - 适用：`Library` 构造期清理为白名单 + 保留清单三态 + Books 数组校验的版本（N1–N4，见 `REPORT-N1-N2.md`、`REPORT-N3-N4.md`）。
 - 新结论：①非应用命名的文件（如 `testdata` 的 `test-book-1.txt`、`keepme.txt/.dat/.tmp`）永远不会被清理，样例放入顺序无关紧要；②状态文件缺失、损坏或缺少可读取的 Books 数组（`{}`、`{"Books":null}`、类型错误）时不做任何清理，应用命名的副本记入 `library.preserved.json` 保留清单，重启也不误删；③`library.preserved.json` 存在但不可信（JSON 损坏、内容 null、元素非字符串、读取失败/被占用）时跳过整次启动清理且绝不写回覆盖故障现场——探针造读取失败可用 `FileShare.None` 独占持有；④有效书架（显式 `"Books"` 数组，含 `[]`）下仍会删除「无引用且不在保留清单中」的 `32位十六进制.txt` 副本及 `.txt.tmp`——探针手工构造应用命名样例且配有效书架时，需登记进保留清单或留到记录阶段之后放入。
@@ -88,6 +93,7 @@
 - 适用：自动化验证浮窗右键菜单项、屏幕取色与配色保存失败场景。
 - 关键步骤：①右键菜单是 `TrackPopupMenu` 原生弹窗，右键后用 `keybd_event` 发 Down 逐项移动（分隔符自动跳过；当前项序：置顶、背景 0/50/100、边框 0/50/100、阅读配色…、返回普通模式、退出——「阅读配色…」需 8 个 Down 后 Enter），菜单项新增时要重数；②配色面板是 WPF 窗口，UIA 可用 x:Name 作为 AutomationId 定位（主窗口在浮窗模式下隐藏，只能从进程窗口枚举里找含 `ConfirmButton` 的窗口）；③取色验证先另起一个独立 PowerShell WinForms 无边框窗口（如 #123456）当已知色块，吸管取样后比对回填色值，截图确认 HUD；④保存失败探测用 `FileShare.None` 独占持有 `library.json`（同 N1 探针手法），点「确定」后用前台 #32770 + Enter 关提示框。
 - 证据：`.run/colors/`（shot-08～shot-19b 截图、uia.ps1/prep.ps1/holdstate.ps1）；实现提交见 feat/reading-colors 阅读配色轮。
+- 字号轮在「阅读配色…」后插入「正文字号…」。`sky.list_windows` 与 `sky.list_apps` 在本机未列出 `WS_EX_TOOLWINDOW` 的极简浮窗。可在独立 STA 探针中调用对应命令，核对实际浮窗的面板归属与排版结果。该方法覆盖命令分派，实际右键命中仍需桌面复验。证据见 `.run/font-size-app-5673f6bf/probe-result.txt`。
 
 ### WPF 弹层与模态窗口的 UIA 定位（2026-11-09，图标顶栏轮）
 - 适用：对 WPF `Popup` 弹层（如顶部菜单）和应用内模态窗口（如帮助窗口）做 UIA 自动化。

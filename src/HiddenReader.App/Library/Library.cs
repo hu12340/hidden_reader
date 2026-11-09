@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using HiddenReader.Core.Reading;
 
 namespace HiddenReader.App.Data;
 
@@ -59,6 +60,26 @@ public sealed class AppState
     /// </summary>
     public string TextColor { get; set; } = "#E4E2DC";
     public string BackgroundColor { get; set; } = "#000000";
+
+    /// <summary>所有书籍与两种模式共用的已确认字号（DIP）。</summary>
+    [JsonConverter(typeof(ReadingFontSizeConverter))]
+    public int ReadingFontSize { get; set; } = TextSettings.DefaultFontSize;
+}
+
+internal sealed class ReadingFontSizeConverter : JsonConverter<int>
+{
+    public override int Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out int size)
+            && size is >= TextSettings.MinimumFontSize and <= TextSettings.MaximumFontSize) return size;
+
+        // 单个可选外观字段无效时使用默认字号，仍可读取书架与阅读进度。
+        reader.Skip();
+        return TextSettings.DefaultFontSize;
+    }
+
+    public override void Write(Utf8JsonWriter writer, int value, JsonSerializerOptions options)
+        => writer.WriteNumberValue(value);
 }
 
 /// <summary>

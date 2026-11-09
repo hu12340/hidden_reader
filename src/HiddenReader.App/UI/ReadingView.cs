@@ -42,7 +42,7 @@ public sealed class ReadingView : FrameworkElement
 
     /// <summary>
     /// 配色变化只重绘当前页：保留 _page、阅读锚点与选区，不做重排。
-    /// 重排只在尺寸或锚点变化时发生，避免预览配色时阅读位置跳动。
+    /// 配色预览沿用现有排版，避免阅读位置跳动。
     /// </summary>
     private void OnColorsChanged()
     {

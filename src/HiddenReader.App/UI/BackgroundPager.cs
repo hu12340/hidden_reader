@@ -6,12 +6,12 @@ namespace HiddenReader.App.UI;
 /// 全书分页的后台线程。Paginator.Layout 依赖 WPF 文本测量（FormattedText），
 /// 不能在 MTA 线程运行、也不应阻塞 UI 线程，因此使用专用 STA 线程逐页计算，
 /// 期间普通窗口保持可重绘、可移动、可翻页。
-/// 同一时刻只保留最新请求：切书或窗口缩放后，未完成的旧计算被放弃。
+/// 同一时刻只保留最新请求：切书、窗口缩放或调整字号后，未完成的旧计算被放弃。
 /// </summary>
 internal sealed class BackgroundPager : IDisposable
 {
-    public sealed record PagerRequest(ReadingSession Session, double Width, double Height, double Ppd);
-    public sealed record Result(ReadingSession Session, List<int> Starts, double Width, double Height, double Ppd);
+    private sealed record PagerRequest(ReadingSession Session, double Width, double Height, double Ppd, TextSettings Settings);
+    public sealed record Result(ReadingSession Session, List<int> Starts, double Width, double Height, double Ppd, double FontSize);
 
     private readonly object _gate = new();
     private readonly SemaphoreSlim _signal = new(0);
@@ -35,7 +35,8 @@ internal sealed class BackgroundPager : IDisposable
         lock (_gate)
         {
             if (_disposed) return;
-            _pending = new PagerRequest(session, width, height, ppd);
+            // 预览可能在后台分页期间改变字号，每次请求只用发出时的排版设置。
+            _pending = new PagerRequest(session, width, height, ppd, session.Settings.Clone());
             _signal.Release();
         }
     }
@@ -67,7 +68,7 @@ internal sealed class BackgroundPager : IDisposable
         long lastPendingCheck = 0;
         while (start < text.Length)
         {
-            // 计算中途出现新请求（切书、缩放）时放弃本次结果，避免排队滞后。
+            // 计算中途出现新请求时放弃本次结果，避免排队滞后。
             if (stopwatch.ElapsedMilliseconds - lastPendingCheck >= 16)
             {
                 lastPendingCheck = stopwatch.ElapsedMilliseconds;
@@ -76,7 +77,7 @@ internal sealed class BackgroundPager : IDisposable
                     if (_disposed || _pending is not null) return null;
                 }
             }
-            var page = Paginator.Layout(text, start, request.Width, request.Height, request.Session.Settings, request.Ppd);
+            var page = Paginator.Layout(text, start, request.Width, request.Height, request.Settings, request.Ppd);
             if (page.End <= start) break;
             start = page.End;
             if (start >= text.Length) break;
@@ -85,7 +86,7 @@ internal sealed class BackgroundPager : IDisposable
             if (text.AsSpan(start).IsWhiteSpace()) break;
             starts.Add(start);
         }
-        return new Result(request.Session, starts, request.Width, request.Height, request.Ppd);
+        return new Result(request.Session, starts, request.Width, request.Height, request.Ppd, request.Settings.FontSize);
     }
 
     public void Dispose()
