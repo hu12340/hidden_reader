@@ -1,0 +1,23 @@
+<Window x:Class="HiddenReader.App.UI.HelpWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="420" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="#1E1F26" Foreground="#E4E2DC">
+    <!--
+      帮助窗口（快速上手 / 键盘快捷键）：行内容由代码构建。
+      「关闭」按钮 IsCancel=True 使 Esc 也能关闭窗口；窗口是独立 Window，
+      其中的按键不会进入主窗口的正文翻页路径。
+    -->
+    <StackPanel Margin="21,17,21,17">
+        <TextBlock x:Name="TitleText" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <TextBlock x:Name="IntroText" Foreground="#B6C1D0" TextWrapping="Wrap" Margin="0,0,0,14"
+                   Visibility="Collapsed"/>
+        <StackPanel x:Name="Body"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Content="关闭" Width="64" IsCancel="True" IsDefault="True"
+                    Background="#2C2E38" Foreground="#E4E2DC" BorderBrush="#4A4C58"
+                    Padding="8,3"/>
+        </StackPanel>
+    </StackPanel>
+</Window>
