@@ -88,3 +88,13 @@
 - 适用：自动化验证浮窗右键菜单项、屏幕取色与配色保存失败场景。
 - 关键步骤：①右键菜单是 `TrackPopupMenu` 原生弹窗，右键后用 `keybd_event` 发 Down 逐项移动（分隔符自动跳过；当前项序：置顶、背景 0/50/100、边框 0/50/100、阅读配色…、返回普通模式、退出——「阅读配色…」需 8 个 Down 后 Enter），菜单项新增时要重数；②配色面板是 WPF 窗口，UIA 可用 x:Name 作为 AutomationId 定位（主窗口在浮窗模式下隐藏，只能从进程窗口枚举里找含 `ConfirmButton` 的窗口）；③取色验证先另起一个独立 PowerShell WinForms 无边框窗口（如 #123456）当已知色块，吸管取样后比对回填色值，截图确认 HUD；④保存失败探测用 `FileShare.None` 独占持有 `library.json`（同 N1 探针手法），点「确定」后用前台 #32770 + Enter 关提示框。
 - 证据：`.run/colors/`（shot-08～shot-19b 截图、uia.ps1/prep.ps1/holdstate.ps1）；实现提交见 feat/reading-colors 阅读配色轮。
+
+### WPF 弹层与模态窗口的 UIA 定位（2026-11-09，图标顶栏轮）
+- 适用：对 WPF `Popup` 弹层（如顶部菜单）和应用内模态窗口（如帮助窗口）做 UIA 自动化。
+- 事实与关键步骤：①弹层内复杂内容按钮（StackPanel 多 TextBlock）不暴露为 UIA Button，多半也无 Name——给按钮加 `x:Name` 用 AutomationId 定位（如 `ImportButton`、`RemoveButton`），或找其 Text 元素按中心真实点击；②弹层刚展开时 UIA 子树异步挂入，FindFirst 可能瞬时为空，需轮询约 2.5 秒再判失败；③`ShowDialog` 模态窗口不出现在 UIA 根子树（`FocusedElement` 却能返回其名称，勿据焦点亮盲信窗口存在）——改用 `Get-ProcessWindows`+标题做 Win32 枚举再 `AutomationElement::FromHandle` 包装。
+- 证据：`.run/icon-menu/probe-uia.ps1`、`probe-help.ps1`（枚举对照）；`run1.ps1`+`result1.txt`（38/38，feat/icon-top-menu）。
+
+### 边缘缩放拖动与 MoveWindow 传参（2026-11-09，图标顶栏轮）
+- 适用：`gui.ps1` 系脚本做 WindowChrome 窗口边缘缩放自动化、脚本内自拼 RECT 结构时。
+- 关键步骤：①按住鼠标的缩放拖动必须增量移动（每步 ~10px 间隔 60ms），单步 50px 大跳跃实测不被窗口尺寸循环跟随，dw=0 会误判为应用缺陷（`SetCursorPos` 校验通过也无济于事）；②自定义 RECT 结构（只有 Left/Top/Right/Bottom）没有 Width/Height——`MoveWindow` 传 `$null` 宽高会把窗口缩成 0 尺寸且无报错，后续所有坐标断言连环失败，宽高一律用 `Right-Left`/`Bottom-Top` 现算。
+- 证据：`.run/icon-menu/probe-narrow.ps1`（增量移动 +50 生效、窄窗命中成功）对照 `run1.ps1` 早期 dw=0 记录；`result1.txt`。
