@@ -28,6 +28,9 @@ public partial class MainWindow : Window
     /// 只在极短时间窗内生效，否则标记残留会让下一次点开菜单失效。</summary>
     private Popup? _menuJustClosedSource;
     private DateTime _menuJustClosedAt;
+    /// <summary>Esc 关闭弹层时置真：Closed 事件异步到达，不得当作「外击关闭」标记，
+    /// 否则 Esc 后立即点击同一图标会被 ToggleMenu 误判为关闭请求而不展开。</summary>
+    private bool _menuClosedByOverlayEscape;
 
     public MainWindow()
     {
@@ -116,15 +119,28 @@ public partial class MainWindow : Window
 
     private void OnViewMenuClick(object sender, RoutedEventArgs e) => ToggleMenu(ViewMenuPopup);
 
-    private void OnFileMenuPopupClosed(object? sender, EventArgs e)
-    {
-        _menuJustClosedSource = FileMenuPopup;
-        _menuJustClosedAt = DateTime.UtcNow;
-    }
+    private void OnSettingsMenuClick(object sender, RoutedEventArgs e) => ToggleMenu(SettingsMenuPopup);
 
-    private void OnViewMenuPopupClosed(object? sender, EventArgs e)
+    private void OnHelpMenuClick(object sender, RoutedEventArgs e) => ToggleMenu(HelpMenuPopup);
+
+    private void OnFileMenuPopupClosed(object? sender, EventArgs e) => HandleMenuPopupClosed(FileMenuPopup);
+
+    private void OnViewMenuPopupClosed(object? sender, EventArgs e) => HandleMenuPopupClosed(ViewMenuPopup);
+
+    private void OnSettingsMenuPopupClosed(object? sender, EventArgs e) => HandleMenuPopupClosed(SettingsMenuPopup);
+
+    private void OnHelpMenuPopupClosed(object? sender, EventArgs e) => HandleMenuPopupClosed(HelpMenuPopup);
+
+    private void HandleMenuPopupClosed(Popup popup)
     {
-        _menuJustClosedSource = ViewMenuPopup;
+        if (_menuClosedByOverlayEscape)
+        {
+            // Esc（CloseTopOverlay）路径：立即重开是合法操作，不留下关闭标记。
+            _menuClosedByOverlayEscape = false;
+            _menuJustClosedSource = null;
+            return;
+        }
+        _menuJustClosedSource = popup;
         _menuJustClosedAt = DateTime.UtcNow;
     }
 
@@ -142,11 +158,31 @@ public partial class MainWindow : Window
         popup.IsOpen = true;
     }
 
-    /// <summary>收起两个菜单弹层；不触碰焦点归属（由各入口自行决定）。</summary>
+    /// <summary>收起全部菜单弹层；不触碰焦点归属（由各入口自行决定）。</summary>
     private void CloseMenus()
     {
         FileMenuPopup.IsOpen = false;
         ViewMenuPopup.IsOpen = false;
+        SettingsMenuPopup.IsOpen = false;
+        HelpMenuPopup.IsOpen = false;
+    }
+
+    // ---------- 帮助窗口 ----------
+
+    private void OnOpenGuide(object sender, RoutedEventArgs e) => ShowHelp(HelpWindow.CreateGuide());
+
+    private void OnOpenShortcuts(object sender, RoutedEventArgs e) => ShowHelp(HelpWindow.CreateShortcuts());
+
+    /// <summary>
+    /// 在应用内打开帮助窗口（模态）。关闭后焦点回到问号图标，便于键盘继续操作。
+    /// 帮助窗口是独立 Window，其中的按键不会进入正文翻页路径。
+    /// </summary>
+    private void ShowHelp(HelpWindow window)
+    {
+        CloseMenus();
+        window.Owner = this;
+        window.ShowDialog();
+        HelpButton.Focus();
     }
 
     // ---------- 书架 ----------
@@ -268,6 +304,8 @@ public partial class MainWindow : Window
     {
         _menuJustClosedSource = null;
         ViewMenuPopup.IsOpen = false;
+        SettingsMenuPopup.IsOpen = false;
+        HelpMenuPopup.IsOpen = false;
         FileMenuPopup.IsOpen = true;
     }
 
@@ -377,7 +415,7 @@ public partial class MainWindow : Window
         if (_busy) return;
         if (_session is null || Reader.ActualWidth < 2)
         {
-            PageLabel.Text = _currentBook is null ? "从「文件」导入 TXT 小说" : string.Empty;
+            PageLabel.Text = _currentBook is null ? "从书页图标导入 TXT 小说" : string.Empty;
             PageTotal.Text = "页";
             PageBox.Clear();
             PageBox.IsEnabled = false;
@@ -450,7 +488,8 @@ public partial class MainWindow : Window
         if (Keyboard.FocusedElement is TextBoxBase) return;
 
         // 菜单打开时按键属于菜单交互，不进入正文翻页。
-        if (FileMenuPopup.IsOpen || ViewMenuPopup.IsOpen) return;
+        if (FileMenuPopup.IsOpen || ViewMenuPopup.IsOpen
+            || SettingsMenuPopup.IsOpen || HelpMenuPopup.IsOpen) return;
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
         {
@@ -497,16 +536,34 @@ public partial class MainWindow : Window
     {
         if (FileMenuPopup.IsOpen)
         {
+            _menuClosedByOverlayEscape = true;
             FileMenuPopup.IsOpen = false;
             _menuJustClosedSource = null;
-            FileButton.Focus();
+            BookButton.Focus();
             return true;
         }
         if (ViewMenuPopup.IsOpen)
         {
+            _menuClosedByOverlayEscape = true;
             ViewMenuPopup.IsOpen = false;
             _menuJustClosedSource = null;
-            ViewButton.Focus();
+            EyeButton.Focus();
+            return true;
+        }
+        if (SettingsMenuPopup.IsOpen)
+        {
+            _menuClosedByOverlayEscape = true;
+            SettingsMenuPopup.IsOpen = false;
+            _menuJustClosedSource = null;
+            GearButton.Focus();
+            return true;
+        }
+        if (HelpMenuPopup.IsOpen)
+        {
+            _menuClosedByOverlayEscape = true;
+            HelpMenuPopup.IsOpen = false;
+            _menuJustClosedSource = null;
+            HelpButton.Focus();
             return true;
         }
         if (FindBarRow.Visibility == Visibility.Visible)

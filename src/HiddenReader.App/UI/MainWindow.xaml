@@ -23,6 +23,10 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <!-- 图标几何（16×16 线稿，描边风格与顶部菜单原型一致） -->
         <Geometry x:Key="BookIcon">M8 4C5.5 2 3 2 1.5 3v9c2-1 4.3-1 6.5 1 2.2-2 4.5-2 6.5-1V3C13 2 10.5 2 8 4v9</Geometry>
+        <Geometry x:Key="EyeIcon">M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8z M6.2 8a1.8 1.8 0 1 0 3.6 0 1.8 1.8 0 0 0-3.6 0</Geometry>
+        <Geometry x:Key="GearIcon">M6.6 1.5h2.8l.3 1.8 1.2.7 1.7-.7L14 5.7l-1.4 1.2v2.2l1.4 1.2-1.4 2.4-1.7-.7-1.2.7-.3 1.8H6.6l-.3-1.8-1.2-.7-1.7.7L2 10.3l1.4-1.2V6.9L2 5.7l1.4-2.4 1.7.7 1.2-.7z M5.9 8a2.1 2.1 0 1 0 4.2 0 2.1 2.1 0 0 0-4.2 0</Geometry>
+        <Geometry x:Key="HelpIcon">M8 1.6a6.4 6.4 0 1 0 0 12.8A6.4 6.4 0 0 0 8 1.6z M6 6a2 2 0 1 1 3.4 1.5C8.4 8.3 8 8.5 8 9.5 M8 11.5h.01</Geometry>
+        <Geometry x:Key="KeyboardIcon">M3 3.5h10a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 11V5A1.5 1.5 0 0 1 3 3.5z M4 6.5h.1M6.5 6.5h.1M9 6.5h.1M11.5 6.5h.1M4 9.5h.1M6.5 9.5h5.4</Geometry>
         <Geometry x:Key="AddIcon">M3 1.5h6.5l3 3v10h-9zM9 1.5V5h3.5M5.5 9.5h4.5M7.75 7.25v4.5</Geometry>
         <Geometry x:Key="FloatIcon">M3.5 2h9a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z M7.5 7.5h5v3.8h-5z</Geometry>
         <Geometry x:Key="ListIcon">M5 4h9M5 8h9M5 12h9M2 4h.1M2 8h.1M2 12h.1</Geometry>
@@ -209,7 +213,7 @@
                                        Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}"/>
                         </Grid>
                     </Button>
-                    <Button Grid.Column="1" Click="OnShelfRemoveClick" Tag="{Binding Book}"
+                    <Button Grid.Column="1" x:Name="RemoveButton" Click="OnShelfRemoveClick" Tag="{Binding Book}"
                             ToolTip="从书架移除" Height="29" Width="30"
                             Style="{StaticResource RemoveButton}" Padding="0">
                         <Path Data="{StaticResource CloseIcon}" Style="{StaticResource GlyphIcon}" Width="12" Height="12"/>
@@ -229,7 +233,7 @@
     <Grid>
     <Border x:Name="RootBorder" Background="#1E1F26">
         <DockPanel>
-            <!-- 顶部栏：应用图标 + 文件 / 查看 + 极简浮窗 + 窗口按钮（同一行） -->
+            <!-- 顶部栏：应用图标 + 书页/眼睛/齿轮/问号/极简浮窗五个图标入口 + 窗口按钮 -->
             <Border DockPanel.Dock="Top" Height="44" Background="#1E1F26"
                     BorderBrush="#303641" BorderThickness="0,0,0,1">
                 <DockPanel LastChildFill="False">
@@ -239,11 +243,28 @@
                         <Path Data="{StaticResource BookIcon}" Style="{StaticResource GlyphIcon}"
                               Stroke="#D8E8FF" Width="14" Height="14"/>
                     </Border>
-                    <Button x:Name="FileButton" DockPanel.Dock="Left" Content="文件"
-                            Style="{StaticResource TopBarButton}" Click="OnFileMenuClick"/>
-                    <Button x:Name="ViewButton" DockPanel.Dock="Left" Content="查看"
-                            Style="{StaticResource TopBarButton}" Click="OnViewMenuClick"/>
-                    <!-- 极简浮窗：仅图标，保留悬停提示与可访问名称 -->
+                    <!-- 左侧图标组：书页、眼睛、齿轮、问号、极简浮窗（顺序与原型一致） -->
+                    <Button x:Name="BookButton" DockPanel.Dock="Left" Width="32" Padding="0"
+                            Style="{StaticResource TopBarButton}" Click="OnFileMenuClick"
+                            ToolTip="书架与导入" AutomationProperties.Name="书架与导入">
+                        <Path Data="{StaticResource BookIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                    </Button>
+                    <Button x:Name="EyeButton" DockPanel.Dock="Left" Width="32" Padding="0"
+                            Style="{StaticResource TopBarButton}" Click="OnViewMenuClick"
+                            ToolTip="查看" AutomationProperties.Name="查看">
+                        <Path Data="{StaticResource EyeIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                    </Button>
+                    <Button x:Name="GearButton" DockPanel.Dock="Left" Width="32" Padding="0"
+                            Style="{StaticResource TopBarButton}" Click="OnSettingsMenuClick"
+                            ToolTip="设置" AutomationProperties.Name="设置">
+                        <Path Data="{StaticResource GearIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                    </Button>
+                    <Button x:Name="HelpButton" DockPanel.Dock="Left" Width="32" Padding="0"
+                            Style="{StaticResource TopBarButton}" Click="OnHelpMenuClick"
+                            ToolTip="帮助" AutomationProperties.Name="帮助">
+                        <Path Data="{StaticResource HelpIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                    </Button>
+                    <!-- 极简浮窗：左侧图标组的最后一项 -->
                     <Button x:Name="FloatButton" DockPanel.Dock="Left"
                             Style="{StaticResource TopBarButton}" Click="OnEnterFloat"
                             ToolTip="极简浮窗" AutomationProperties.Name="极简浮窗" Padding="0" Width="32">
@@ -353,8 +374,8 @@
         </DockPanel>
     </Border>
 
-    <!-- 文件菜单弹层（置于窗口元素之外，避免参与布局） -->
-    <Popup x:Name="FileMenuPopup" PlacementTarget="{Binding ElementName=FileButton}"
+    <!-- 书架菜单弹层（置于窗口元素之外，避免参与布局） -->
+    <Popup x:Name="FileMenuPopup" PlacementTarget="{Binding ElementName=BookButton}"
            Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
            Closed="OnFileMenuPopupClosed" VerticalOffset="4">
         <Border Style="{StaticResource FlyoutBorder}" Width="308">
@@ -376,13 +397,13 @@
                     <ItemsControl x:Name="ShelfList" ItemTemplate="{StaticResource ShelfItemTemplate}"/>
                 </ScrollViewer>
                 <TextBlock x:Name="ShelfEmptyText" Margin="9,6,9,9" Foreground="#9BA7B8" FontSize="12"
-                           TextWrapping="Wrap" Text="书架为空，可以导入一本 TXT 小说。"/>
+                           TextWrapping="Wrap" Text="书架为空，点击顶部的书页图标导入一本 TXT 小说。"/>
             </StackPanel>
         </Border>
     </Popup>
 
     <!-- 查看菜单弹层 -->
-    <Popup x:Name="ViewMenuPopup" PlacementTarget="{Binding ElementName=ViewButton}"
+    <Popup x:Name="ViewMenuPopup" PlacementTarget="{Binding ElementName=EyeButton}"
            Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
            Closed="OnViewMenuPopupClosed" VerticalOffset="4">
         <Border Style="{StaticResource FlyoutBorder}" Width="204">
@@ -403,10 +424,42 @@
                                    VerticalAlignment="Center" FontFamily="Consolas"/>
                     </StackPanel>
                 </Button>
+            </StackPanel>
+        </Border>
+    </Popup>
+
+    <!-- 设置菜单弹层 -->
+    <Popup x:Name="SettingsMenuPopup" PlacementTarget="{Binding ElementName=GearButton}"
+           Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+           Closed="OnSettingsMenuPopupClosed" VerticalOffset="4">
+        <Border Style="{StaticResource FlyoutBorder}" Width="204">
+            <StackPanel>
                 <Button Click="OnOpenReadingColors" Style="{StaticResource CommandButton}">
                     <StackPanel Orientation="Horizontal">
                         <Path Data="{StaticResource ColorIcon}" Style="{StaticResource MenuIcon}"/>
                         <TextBlock Text="阅读配色…" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+    </Popup>
+
+    <!-- 帮助菜单弹层 -->
+    <Popup x:Name="HelpMenuPopup" PlacementTarget="{Binding ElementName=HelpButton}"
+           Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
+           Closed="OnHelpMenuPopupClosed" VerticalOffset="4">
+        <Border Style="{StaticResource FlyoutBorder}" Width="204">
+            <StackPanel>
+                <Button Click="OnOpenGuide" Style="{StaticResource CommandButton}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource BookIcon}" Style="{StaticResource MenuIcon}"/>
+                        <TextBlock Text="快速上手…" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button Click="OnOpenShortcuts" Style="{StaticResource CommandButton}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="{StaticResource KeyboardIcon}" Style="{StaticResource MenuIcon}"/>
+                        <TextBlock Text="键盘快捷键…" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
             </StackPanel>
