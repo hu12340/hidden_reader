@@ -93,6 +93,7 @@
 - 适用：对 WPF `Popup` 弹层（如顶部菜单）和应用内模态窗口（如帮助窗口）做 UIA 自动化。
 - 事实与关键步骤：①弹层内复杂内容按钮（StackPanel 多 TextBlock）不暴露为 UIA Button，多半也无 Name——给按钮加 `x:Name` 用 AutomationId 定位（如 `ImportButton`、`RemoveButton`），或找其 Text 元素按中心真实点击；②弹层刚展开时 UIA 子树异步挂入，FindFirst 可能瞬时为空，需轮询约 2.5 秒再判失败；③`ShowDialog` 模态窗口不出现在 UIA 根子树（`FocusedElement` 却能返回其名称，勿据焦点亮盲信窗口存在）——改用 `Get-ProcessWindows`+标题做 Win32 枚举再 `AutomationElement::FromHandle` 包装。
 - 证据：`.run/icon-menu/probe-uia.ps1`、`probe-help.ps1`（枚举对照）；`run1.ps1`+`result1.txt`（38/38，feat/icon-top-menu）。
+- 补充（2026-11-09，D1 竞态修复轮，实测插桩证据）：①`StaysOpen=False` 弹层的外击自动关闭发生在触发按钮 `PreviewMouseDown` 之前（按下时读 `IsOpen` 已为 False，且后续点击中该隧道事件不再触发——原始按下被弹层捕获转发），`Popup.Closed` 事件恒定迟到约 150ms，因此 Click 处理器无法靠事件时序区分「本次按下关闭」与「早前关闭」；带时间窗的关闭标记方案在此类快速往返场景必然误判。②`PopupAnimation="Fade"` 的关闭淡出在弹层被另一弹层遮挡时动画时钟停滞，hwnd 长期不隐藏：Win32 `IsWindowVisible` 仍为 True、内容元素 `IsOffscreen=False` 且矩形有效，UIA 与命中测试都会被僵尸弹层干扰；自动化判定弹层真实可见性需沿 RawView 向上找最近带 hwnd 祖先再查 `IsWindowVisible`，且实现上应避免给此类 Popup 挂关闭动画。③可靠做法是 `StaysOpen="True"`+手动管理关闭（窗口级 `PreviewMouseDown` 区分触发图标与外击、`Deactivated`/`LocationChanged` 收起），使 `ToggleMenu` 能读到精确 `IsOpen`（实现见 `MainWindow.xaml.cs`，回归 `.run/icon-menu/toggle-race.ps1` 5/5）。
 
 ### 边缘缩放拖动与 MoveWindow 传参（2026-11-09，图标顶栏轮）
 - 适用：`gui.ps1` 系脚本做 WindowChrome 窗口边缘缩放自动化、脚本内自拼 RECT 结构时。
