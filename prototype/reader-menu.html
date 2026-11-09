@@ -34,17 +34,16 @@
   .badge { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid #3c506e; border-radius: 20px; color: #bfdaff; white-space: nowrap; font-size: 12px; }
   .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #8eb9f6; }
   .window { height: clamp(480px, 68vh, 710px); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; border: 1px solid #3d4656; border-radius: 9px; background: #1d212a; box-shadow: 0 24px 70px #0008; }
-  .titlebar { position: relative; z-index: 2; display: flex; align-items: center; gap: 12px; min-width: 0; height: 44px; padding: 0 9px 0 12px; border-radius: 8px 8px 0 0; background: #1e232d; border-bottom: 1px solid var(--line); }
+  .titlebar { position: relative; z-index: 2; display: flex; align-items: center; min-width: 0; height: 44px; padding: 0 9px 0 8px; border-radius: 8px 8px 0 0; background: #1e232d; border-bottom: 1px solid var(--line); }
   .brand-icon { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 5px; color: #d8e8ff; background: #354d76; }
-  .menubar { display: flex; align-items: center; gap: 2px; }
+  .menubar { display: flex; align-items: center; gap: 3px; }
   .menu-anchor { position: relative; }
-  .menu-trigger { display: flex; align-items: center; white-space: nowrap; padding: 0 9px; height: 30px; }
+  .menu-trigger { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; color: #afc5e2; }
   .menu-trigger[aria-expanded="true"] { background: #34435b; color: #dceaff; }
-  .float-trigger { width: 32px; justify-content: center; padding: 0; color: #afc5e2; }
   .window-controls { margin-left: auto; display: flex; align-items: center; gap: 18px; color: #a9b3c2; }
   .window-controls .icon { width: 12px; height: 12px; }
   .flyout { position: absolute; top: calc(100% + 6px); left: 0; width: 308px; padding: 5px; border: 1px solid #414b5c; border-radius: 8px; background: #242a35; box-shadow: 0 12px 32px #000a; }
-  .view-menu { width: 204px; }
+  .compact-menu { width: 204px; }
   .command { width: 100%; min-height: 36px; display: flex; align-items: center; gap: 10px; text-align: left; padding: 6px 9px; }
   .command .icon { color: #a8b8ce; }
   .command kbd, .command .check { margin-left: auto; }
@@ -105,11 +104,14 @@
   .color-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
   .color-row output { margin-left: auto; font: 12px Consolas, monospace; }
   .color-row input { width: 42px; height: 29px; border: 1px solid #586579; border-radius: 4px; background: #151a22; }
+  .guide { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; }
+  .guide dt { color: #d6e5fb; }
+  .guide dd { margin: 0; color: #b6c1d0; }
+  .guide kbd { color: #d6e5fb; padding: 2px 5px; border: 1px solid #465468; border-radius: 4px; background: #1b2029; }
   @media (max-width: 500px) {
     .window-controls, .masthead .badge { display: none; }
-    .titlebar { gap: 6px; padding-left: 8px; }
-    .flyout { width: min(282px, calc(100vw - 66px)); }
-    .view-menu { width: 176px; }
+    .flyout { width: min(282px, calc(100vw - 46px)); }
+    .compact-menu { width: 164px; }
     .leaf { padding-inline: 17px; }
     .prose { font-size: 15px; }
   }
@@ -120,6 +122,10 @@
   <symbol id="book" viewBox="0 0 16 16"><path d="M8 4C5.5 2 3 2 1.5 3v9c2-1 4.3-1 6.5 1 2.2-2 4.5-2 6.5-1V3C13 2 10.5 2 8 4v9"/></symbol>
   <symbol id="add" viewBox="0 0 16 16"><path d="M3 1.5h6.5l3 3v10h-9zM9 1.5V5h3.5M5.5 9.5h4.5M7.75 7.25v4.5"/></symbol>
   <symbol id="float" viewBox="0 0 16 16"><rect x="1.5" y="2" width="13" height="11.5" rx="2"/><rect x="7.5" y="7.5" width="5" height="3.8" rx=".5"/></symbol>
+  <symbol id="eye" viewBox="0 0 16 16"><path d="M1 8s2.5-4.5 7-4.5S15 8 15 8s-2.5 4.5-7 4.5S1 8 1 8Z"/><circle cx="8" cy="8" r="1.8"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><path d="M6.6 1.5h2.8l.3 1.8 1.2.7 1.7-.7L14 5.7l-1.4 1.2v2.2l1.4 1.2-1.4 2.4-1.7-.7-1.2.7-.3 1.8H6.6l-.3-1.8-1.2-.7-1.7.7L2 10.3l1.4-1.2V6.9L2 5.7l1.4-2.4 1.7.7 1.2-.7z"/><circle cx="8" cy="8" r="2.1"/></symbol>
+  <symbol id="help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.4"/><path d="M6 6a2 2 0 1 1 3.4 1.5C8.4 8.3 8 8.5 8 9.5m0 2h.01"/></symbol>
+  <symbol id="keyboard" viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5"/><path d="M4 6.5h.1m2.5 0h.1m2.5 0h.1m2.5 0h.1M4 9.5h.1m2.5 0h5.4"/></symbol>
   <symbol id="list" viewBox="0 0 16 16"><path d="M5 4h9M5 8h9M5 12h9M2 4h.1M2 8h.1M2 12h.1"/></symbol>
   <symbol id="search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><path d="m10 10 3.5 3.5"/></symbol>
   <symbol id="color" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 2v12m0-9 3-2m-3 5 5-3m-5 6 6-3m-6 6 5-3"/></symbol>
@@ -143,25 +149,36 @@
 
   <section class="window" id="window" aria-label="HiddenReader 阅读器原型">
     <header class="titlebar">
-      <span class="brand-icon" aria-hidden="true"><svg class="icon"><use href="#book"/></svg></span>
       <nav class="menubar" aria-label="阅读器顶部菜单">
         <div class="menu-anchor">
-          <button class="menu-trigger" id="fileButton" aria-expanded="false" aria-controls="fileMenu">文件</button>
-          <section class="flyout" id="fileMenu" aria-label="文件" hidden>
+          <button class="menu-trigger" id="fileButton" title="书架与导入" aria-label="书架与导入" aria-expanded="false" aria-controls="fileMenu"><span class="brand-icon" aria-hidden="true"><svg class="icon"><use href="#book"/></svg></span></button>
+          <section class="flyout" id="fileMenu" aria-label="书架与导入" hidden>
             <button class="command" id="importButton"><svg class="icon" aria-hidden="true"><use href="#add"/></svg>导入 TXT… <kbd>Ctrl+O</kbd></button>
             <div class="shelf-heading"><span>书架</span><span id="bookCount"></span></div>
             <div class="shelf" id="shelf"></div>
           </section>
         </div>
         <div class="menu-anchor">
-          <button class="menu-trigger" id="viewButton" aria-expanded="false" aria-controls="viewMenu">查看</button>
-          <section class="flyout view-menu" id="viewMenu" aria-label="查看" hidden>
+          <button class="menu-trigger" id="viewButton" title="查看" aria-label="查看" aria-expanded="false" aria-controls="viewMenu"><svg class="icon" aria-hidden="true"><use href="#eye"/></svg></button>
+          <section class="flyout compact-menu" id="viewMenu" aria-label="查看" hidden>
             <button class="command" id="tocButton" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#list"/></svg>目录 <span class="check" id="tocCheck" hidden>✓</span></button>
             <button class="command" id="searchButton"><svg class="icon" aria-hidden="true"><use href="#search"/></svg>搜索 <kbd>Ctrl+F</kbd></button>
+          </section>
+        </div>
+        <div class="menu-anchor">
+          <button class="menu-trigger" id="settingsButton" title="设置" aria-label="设置" aria-expanded="false" aria-controls="settingsMenu"><svg class="icon" aria-hidden="true"><use href="#gear"/></svg></button>
+          <section class="flyout compact-menu" id="settingsMenu" aria-label="设置" hidden>
             <button class="command" id="colorButton"><svg class="icon" aria-hidden="true"><use href="#color"/></svg>阅读配色…</button>
           </section>
         </div>
-        <button class="menu-trigger float-trigger" id="floatButton" title="极简浮窗" aria-label="极简浮窗"><svg class="icon" aria-hidden="true"><use href="#float"/></svg></button>
+        <div class="menu-anchor">
+          <button class="menu-trigger" id="helpButton" title="帮助" aria-label="帮助" aria-expanded="false" aria-controls="helpMenu"><svg class="icon" aria-hidden="true"><use href="#help"/></svg></button>
+          <section class="flyout compact-menu" id="helpMenu" aria-label="帮助" hidden>
+            <button class="command" id="guideButton"><svg class="icon" aria-hidden="true"><use href="#book"/></svg>快速上手…</button>
+            <button class="command" id="shortcutsButton"><svg class="icon" aria-hidden="true"><use href="#keyboard"/></svg>键盘快捷键…</button>
+          </section>
+        </div>
+        <button class="menu-trigger" id="floatButton" title="极简浮窗" aria-label="极简浮窗"><svg class="icon" aria-hidden="true"><use href="#float"/></svg></button>
       </nav>
       <div class="window-controls" aria-hidden="true"><svg class="icon"><use href="#min"/></svg><svg class="icon"><use href="#max"/></svg><svg class="icon"><use href="#close"/></svg></div>
     </header>
@@ -199,7 +216,7 @@
   </section>
 
   <footer class="stage-footer">
-    <span id="hint" role="status">试试「文件」里的书架，或在「查看」中打开目录。</span>
+    <span id="hint" role="status">点击左上角的书页图标打开书架，点击问号查看帮助。</span>
     <button class="return" id="returnButton" hidden>返回普通模式 <kbd>Esc</kbd></button>
     <span id="sessionNote">示例书库 · 刷新可重置</span>
   </footer>
@@ -229,9 +246,35 @@
     </div>
   </form>
 </dialog>
+<dialog id="guideDialog" aria-labelledby="guideTitle">
+  <form method="dialog">
+    <h2 id="guideTitle">快速上手</h2>
+    <p>HiddenReader 是一款本地 TXT 小说阅读器。</p>
+    <dl class="guide">
+      <dt>打开小说</dt><dd>点左上角的书页图标导入 TXT，或从书架选择小说。</dd>
+      <dt>查找正文</dt><dd>点眼睛图标打开目录或搜索，点齿轮可调整阅读配色。</dd>
+      <dt>极简浮窗</dt><dd>点最右侧的浮窗图标进入极简模式。用滚轮阅读，按 <kbd>Esc</kbd> 返回普通模式。在桌面版中，按住 <kbd>Ctrl</kbd>，在正文区按住鼠标左键拖动即可移动浮窗。</dd>
+    </dl>
+    <div class="dialog-actions"><button class="action primary">关闭</button></div>
+  </form>
+</dialog>
+<dialog id="shortcutsDialog" aria-labelledby="shortcutsTitle">
+  <form method="dialog">
+    <h2 id="shortcutsTitle">键盘快捷键</h2>
+    <dl class="guide">
+      <dt><kbd>Ctrl+O</kbd></dt><dd>在普通模式导入 TXT</dd>
+      <dt><kbd>Ctrl+F</kbd></dt><dd>在普通模式搜索当前小说</dd>
+      <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>正文有焦点时翻页</dd>
+      <dt><kbd>Esc</kbd></dt><dd>收起菜单、关闭搜索或退出浮窗</dd>
+    </dl>
+    <div class="dialog-actions"><button class="action primary">关闭</button></div>
+  </form>
+</dialog>
 
 <script>
   const $ = (id) => document.getElementById(id);
+  const menus = ['file', 'view', 'settings', 'help'];
+  const defaultHint = $('hint').textContent;
   const chapter = (title, ...paragraphs) => ({ title, paragraphs });
   const books = [
     { title: '凡人修仙传', page: 0, pages: [
@@ -271,7 +314,7 @@
 
   function setMenu(name, focusFirst = false) {
     activeMenu = name;
-    for (const menu of ['file', 'view']) {
+    for (const menu of menus) {
       $(menu + 'Menu').hidden = name !== menu;
       $(menu + 'Button').setAttribute('aria-expanded', String(name === menu));
     }
@@ -349,7 +392,7 @@
     const current = book?.pages[book.page];
     $('bookCaption').textContent = book?.title ?? 'HIDDENREADER';
     $('chapterTitle').textContent = current?.title || (book ? '正文' : '书架为空');
-    $('statusText').textContent = current?.title || book?.title || '从「文件」导入 TXT';
+    $('statusText').textContent = current?.title || book?.title || '点书页图标导入 TXT';
     $('pageInput').value = book ? book.page + 1 : '';
     $('pageTotal').textContent = book ? '/ ' + book.pages.length + ' 页' : '页';
     for (const id of ['pageInput', 'tocButton', 'searchButton', 'floatButton']) $(id).disabled = !book;
@@ -358,7 +401,7 @@
     renderChapters();
     renderFind();
     $('prose').replaceChildren();
-    const paragraphs = current?.paragraphs ?? ['点击顶部的「文件」，导入一本小说开始阅读。'];
+    const paragraphs = current?.paragraphs ?? ['点击左上角的书页图标，导入一本小说开始阅读。'];
     paragraphs.forEach((text, paragraphIndex) => {
       const p = document.createElement('p');
       const visibleHits = hits.filter((hit) => hit.page === book?.page && hit.paragraph === paragraphIndex);
@@ -466,7 +509,7 @@
     $('sessionNote').hidden = floating;
     $('hint').textContent = floating
       ? '浮窗样式预览 · 按 Esc 或点击「返回普通模式」。'
-      : '试试「文件」里的书架，或在「查看」中打开目录。';
+      : defaultHint;
     (floating ? $('viewport') : $('floatButton')).focus();
   }
 
@@ -529,7 +572,7 @@
     $('hint').textContent = '已在原型中打开《' + item.title + '》。';
   }
 
-  for (const name of ['file', 'view']) {
+  for (const name of menus) {
     $(name + 'Button').onclick = (event) => setMenu(activeMenu === name ? null : name, event.detail === 0);
     $(name + 'Button').onkeydown = (event) => {
       if (event.key !== 'ArrowDown') return;
@@ -580,10 +623,18 @@
     if (event.submitter?.value === 'apply') savedColors = { ink: $('ink').value, paper: $('paper').value };
     $('colorDialog').close();
     applyColors(savedColors);
-    $('viewButton').focus();
+    $('settingsButton').focus();
   }
   $('colorDialog').querySelector('form').onsubmit = closeColorDialog;
   $('colorDialog').oncancel = closeColorDialog;
+  for (const name of ['guide', 'shortcuts']) {
+    const dialog = $(name + 'Dialog');
+    $(name + 'Button').onclick = () => {
+      setMenu(null);
+      dialog.showModal();
+    };
+    dialog.onclose = () => $('helpButton').focus();
+  }
   $('floatButton').onclick = () => setFloating(true);
   $('returnButton').onclick = () => setFloating(false);
   $('prevPage').onclick = () => goToPage(book.page - 1);
@@ -623,7 +674,6 @@
 
   renderShelf();
   renderPage();
-  setMenu('file');
 </script>
 </body>
 </html>

@@ -23,11 +23,6 @@ public partial class MainWindow : Window
     private bool _busy;
     /// <summary>开书序号：切换书籍或重复选择时使旧的异步结果作废。</summary>
     private int _openGeneration;
-    /// <summary>刚被同一次外击关闭的菜单弹层：按下触发按钮时 StaysOpen=False 弹层先关闭，
-    /// 随后的 Click 若立即重开就成了「点不开」，据此识别为关闭请求。
-    /// 只在极短时间窗内生效，否则标记残留会让下一次点开菜单失效。</summary>
-    private Popup? _menuJustClosedSource;
-    private DateTime _menuJustClosedAt;
 
     public MainWindow()
     {
@@ -116,37 +111,71 @@ public partial class MainWindow : Window
 
     private void OnViewMenuClick(object sender, RoutedEventArgs e) => ToggleMenu(ViewMenuPopup);
 
-    private void OnFileMenuPopupClosed(object? sender, EventArgs e)
-    {
-        _menuJustClosedSource = FileMenuPopup;
-        _menuJustClosedAt = DateTime.UtcNow;
-    }
+    private void OnSettingsMenuClick(object sender, RoutedEventArgs e) => ToggleMenu(SettingsMenuPopup);
 
-    private void OnViewMenuPopupClosed(object? sender, EventArgs e)
-    {
-        _menuJustClosedSource = ViewMenuPopup;
-        _menuJustClosedAt = DateTime.UtcNow;
-    }
+    private void OnHelpMenuClick(object sender, RoutedEventArgs e) => ToggleMenu(HelpMenuPopup);
 
+    /// <summary>
+    /// 弹层 StaysOpen=True，IsOpen 不会在 Click 到达前被外击自动改写，
+    /// 这里读到的是精确开关状态：开→收起（同图标再点即关闭），关→互斥展开。
+    /// 不依赖 Popup.Closed（实测迟到约 150ms，无法区分「本次按下关闭」与「早前关闭」，D1 根因）。
+    /// </summary>
     private void ToggleMenu(Popup popup)
     {
-        if (_menuJustClosedSource == popup
-            && (DateTime.UtcNow - _menuJustClosedAt).TotalMilliseconds < 400)
-        {
-            // 同一次按下先关闭了它：本次点击视为关闭请求，不立即重开。
-            _menuJustClosedSource = null;
-            return;
-        }
-        _menuJustClosedSource = null;
+        var wasOpen = popup.IsOpen;
         CloseMenus();
-        popup.IsOpen = true;
+        popup.IsOpen = !wasOpen;
     }
 
-    /// <summary>收起两个菜单弹层；不触碰焦点归属（由各入口自行决定）。</summary>
+    /// <summary>窗口客户区内的点击：点在触发图标上交给 Click 切换；点在其他任何位置收起全部弹层。
+    /// 弹层内容在独立 hwnd 中，不会路由到本窗口，因此弹层内部点击不受影响。</summary>
+    private void OnWindowPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject src && IsMenuTriggerAncestor(src)) return;
+        CloseMenus();
+    }
+
+    private bool IsMenuTriggerAncestor(DependencyObject src)
+    {
+        for (DependencyObject? d = src; d != null; d = (d is System.Windows.Media.Visual v) ? VisualTreeHelper.GetParent(v) : null)
+        {
+            if (ReferenceEquals(d, BookButton) || ReferenceEquals(d, EyeButton)
+                || ReferenceEquals(d, GearButton) || ReferenceEquals(d, HelpButton)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>窗口失活（切走、弹出系统对话框）时收起弹层，模拟 StaysOpen=False 的外击收起语义。</summary>
+    private void OnWindowDeactivated(object? sender, EventArgs e) => CloseMenus();
+
+    /// <summary>标题栏拖动、边缘缩放会移动窗口：与旧行为一致，窗口移动即收起弹层。</summary>
+    private void OnWindowLocationChanged(object? sender, EventArgs e) => CloseMenus();
+
+    /// <summary>收起全部菜单弹层；不触碰焦点归属（由各入口自行决定）。</summary>
     private void CloseMenus()
     {
         FileMenuPopup.IsOpen = false;
         ViewMenuPopup.IsOpen = false;
+        SettingsMenuPopup.IsOpen = false;
+        HelpMenuPopup.IsOpen = false;
+    }
+
+    // ---------- 帮助窗口 ----------
+
+    private void OnOpenGuide(object sender, RoutedEventArgs e) => ShowHelp(HelpWindow.CreateGuide());
+
+    private void OnOpenShortcuts(object sender, RoutedEventArgs e) => ShowHelp(HelpWindow.CreateShortcuts());
+
+    /// <summary>
+    /// 在应用内打开帮助窗口（模态）。关闭后焦点回到问号图标，便于键盘继续操作。
+    /// 帮助窗口是独立 Window，其中的按键不会进入正文翻页路径。
+    /// </summary>
+    private void ShowHelp(HelpWindow window)
+    {
+        CloseMenus();
+        window.Owner = this;
+        window.ShowDialog();
+        HelpButton.Focus();
     }
 
     // ---------- 书架 ----------
@@ -266,8 +295,9 @@ public partial class MainWindow : Window
     /// <summary>移除确认框抢走激活后弹层可能已收起：重新展开文件菜单，方便继续操作。</summary>
     private void KeepFileMenuOpen()
     {
-        _menuJustClosedSource = null;
         ViewMenuPopup.IsOpen = false;
+        SettingsMenuPopup.IsOpen = false;
+        HelpMenuPopup.IsOpen = false;
         FileMenuPopup.IsOpen = true;
     }
 
@@ -377,7 +407,7 @@ public partial class MainWindow : Window
         if (_busy) return;
         if (_session is null || Reader.ActualWidth < 2)
         {
-            PageLabel.Text = _currentBook is null ? "从「文件」导入 TXT 小说" : string.Empty;
+            PageLabel.Text = _currentBook is null ? "从书页图标导入 TXT 小说" : string.Empty;
             PageTotal.Text = "页";
             PageBox.Clear();
             PageBox.IsEnabled = false;
@@ -450,7 +480,8 @@ public partial class MainWindow : Window
         if (Keyboard.FocusedElement is TextBoxBase) return;
 
         // 菜单打开时按键属于菜单交互，不进入正文翻页。
-        if (FileMenuPopup.IsOpen || ViewMenuPopup.IsOpen) return;
+        if (FileMenuPopup.IsOpen || ViewMenuPopup.IsOpen
+            || SettingsMenuPopup.IsOpen || HelpMenuPopup.IsOpen) return;
 
         if ((Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
         {
@@ -498,15 +529,25 @@ public partial class MainWindow : Window
         if (FileMenuPopup.IsOpen)
         {
             FileMenuPopup.IsOpen = false;
-            _menuJustClosedSource = null;
-            FileButton.Focus();
+            BookButton.Focus();
             return true;
         }
         if (ViewMenuPopup.IsOpen)
         {
             ViewMenuPopup.IsOpen = false;
-            _menuJustClosedSource = null;
-            ViewButton.Focus();
+            EyeButton.Focus();
+            return true;
+        }
+        if (SettingsMenuPopup.IsOpen)
+        {
+            SettingsMenuPopup.IsOpen = false;
+            GearButton.Focus();
+            return true;
+        }
+        if (HelpMenuPopup.IsOpen)
+        {
+            HelpMenuPopup.IsOpen = false;
+            HelpButton.Focus();
             return true;
         }
         if (FindBarRow.Visibility == Visibility.Visible)
