@@ -44,10 +44,11 @@
 - 关键步骤：先真实点击文本框（`Mouse-Click` 中心点）获取焦点，再 Ctrl+A、Ctrl+C；断言剪贴板内容而非焦点归属。
 - 证据：`REPORT-D1-D5.md` §3.3。
 
-### WM_CLOSE 不退出应用：ShutdownMode=OnExplicitShutdown（2026-11-06）
-- 适用：脚本化验收中「关闭主窗口/退出应用」步骤；基线 73b0666 与 feat/large-book-reading 均如此。
-- 事实：`App.xaml` 设 `ShutdownMode="OnExplicitShutdown"`，`PostMessage(WM_CLOSE)` 后主窗口销毁但进程驻留（空书库与大书库均实测 10–15 秒不退出）。进程退出只经浮窗菜单「退出」的 `Application.Shutdown()` 路径。
-- 关键步骤：脚本验收用 `Stop-Process -Id` 结束实例（阅读锚点在翻页/滚动/跳页时即时落盘，强杀不丢进度）；「退出后重启」场景可改状态后重启，或用强杀代替正常退出并在报告中注明。
+### 验证关闭主窗口后 `dotnet run` 退出（2026-11-09）
+- 适用：`App.xaml` 使用 `OnMainWindowClose` 的版本。旧版 `OnExplicitShutdown` 下，`WM_CLOSE` 会销毁主窗口并留下进程（基线 `73b0666` 与 `feat/large-book-reading` 实测）。
+- 关键步骤：用独立的 `HR_DATA_DIR` 和 `HR_LOG_DIR` 启动 `dotnet run` 并记录 PID。点击本轮测试窗口的右上角关闭按钮后，按 PID 核对 `dotnet` 和它启动的 `HiddenReader.exe` 均已退出，结合 `app.log` 与 `library.json` 检查关闭处理及阅读状态。
+- 极简模式通过 `Hide()` 保留主窗口。桌面工具无法选中浮窗时，可用 STA 探针启动实际的 `App`，等待恢复浮窗后调用 `FloatWindow.HandleCommand(ID_EXIT)`，核对 `App.Exit`、退出码和保存状态。此方法覆盖退出命令分派，鼠标右键命中需桌面复验。
+- 证据：`.run/titlebar-and-exit/result.txt`、`read-log/app.log` 和 `float-probe-rerun-log/app.log`。
 
 ### 自绘 FrameworkElement 无 UIA 矩形，点击坐标从宿主窗口推算（2026-11-06）
 - 适用：对 `ReadingView`（自定义 FrameworkElement，无 AutomationPeer）做鼠标自动化。
