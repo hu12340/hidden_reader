@@ -23,14 +23,6 @@ public partial class MainWindow : Window
     private bool _busy;
     /// <summary>开书序号：切换书籍或重复选择时使旧的异步结果作废。</summary>
     private int _openGeneration;
-    /// <summary>刚被同一次外击关闭的菜单弹层：按下触发按钮时 StaysOpen=False 弹层先关闭，
-    /// 随后的 Click 若立即重开就成了「点不开」，据此识别为关闭请求。
-    /// 只在极短时间窗内生效，否则标记残留会让下一次点开菜单失效。</summary>
-    private Popup? _menuJustClosedSource;
-    private DateTime _menuJustClosedAt;
-    /// <summary>Esc 关闭弹层时置真：Closed 事件异步到达，不得当作「外击关闭」标记，
-    /// 否则 Esc 后立即点击同一图标会被 ToggleMenu 误判为关闭请求而不展开。</summary>
-    private bool _menuClosedByOverlayEscape;
 
     public MainWindow()
     {
@@ -123,40 +115,41 @@ public partial class MainWindow : Window
 
     private void OnHelpMenuClick(object sender, RoutedEventArgs e) => ToggleMenu(HelpMenuPopup);
 
-    private void OnFileMenuPopupClosed(object? sender, EventArgs e) => HandleMenuPopupClosed(FileMenuPopup);
-
-    private void OnViewMenuPopupClosed(object? sender, EventArgs e) => HandleMenuPopupClosed(ViewMenuPopup);
-
-    private void OnSettingsMenuPopupClosed(object? sender, EventArgs e) => HandleMenuPopupClosed(SettingsMenuPopup);
-
-    private void OnHelpMenuPopupClosed(object? sender, EventArgs e) => HandleMenuPopupClosed(HelpMenuPopup);
-
-    private void HandleMenuPopupClosed(Popup popup)
-    {
-        if (_menuClosedByOverlayEscape)
-        {
-            // Esc（CloseTopOverlay）路径：立即重开是合法操作，不留下关闭标记。
-            _menuClosedByOverlayEscape = false;
-            _menuJustClosedSource = null;
-            return;
-        }
-        _menuJustClosedSource = popup;
-        _menuJustClosedAt = DateTime.UtcNow;
-    }
-
+    /// <summary>
+    /// 弹层 StaysOpen=True，IsOpen 不会在 Click 到达前被外击自动改写，
+    /// 这里读到的是精确开关状态：开→收起（同图标再点即关闭），关→互斥展开。
+    /// 不依赖 Popup.Closed（实测迟到约 150ms，无法区分「本次按下关闭」与「早前关闭」，D1 根因）。
+    /// </summary>
     private void ToggleMenu(Popup popup)
     {
-        if (_menuJustClosedSource == popup
-            && (DateTime.UtcNow - _menuJustClosedAt).TotalMilliseconds < 400)
-        {
-            // 同一次按下先关闭了它：本次点击视为关闭请求，不立即重开。
-            _menuJustClosedSource = null;
-            return;
-        }
-        _menuJustClosedSource = null;
+        var wasOpen = popup.IsOpen;
         CloseMenus();
-        popup.IsOpen = true;
+        popup.IsOpen = !wasOpen;
     }
+
+    /// <summary>窗口客户区内的点击：点在触发图标上交给 Click 切换；点在其他任何位置收起全部弹层。
+    /// 弹层内容在独立 hwnd 中，不会路由到本窗口，因此弹层内部点击不受影响。</summary>
+    private void OnWindowPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject src && IsMenuTriggerAncestor(src)) return;
+        CloseMenus();
+    }
+
+    private bool IsMenuTriggerAncestor(DependencyObject src)
+    {
+        for (DependencyObject? d = src; d != null; d = (d is System.Windows.Media.Visual v) ? VisualTreeHelper.GetParent(v) : null)
+        {
+            if (ReferenceEquals(d, BookButton) || ReferenceEquals(d, EyeButton)
+                || ReferenceEquals(d, GearButton) || ReferenceEquals(d, HelpButton)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>窗口失活（切走、弹出系统对话框）时收起弹层，模拟 StaysOpen=False 的外击收起语义。</summary>
+    private void OnWindowDeactivated(object? sender, EventArgs e) => CloseMenus();
+
+    /// <summary>标题栏拖动、边缘缩放会移动窗口：与旧行为一致，窗口移动即收起弹层。</summary>
+    private void OnWindowLocationChanged(object? sender, EventArgs e) => CloseMenus();
 
     /// <summary>收起全部菜单弹层；不触碰焦点归属（由各入口自行决定）。</summary>
     private void CloseMenus()
@@ -302,7 +295,6 @@ public partial class MainWindow : Window
     /// <summary>移除确认框抢走激活后弹层可能已收起：重新展开文件菜单，方便继续操作。</summary>
     private void KeepFileMenuOpen()
     {
-        _menuJustClosedSource = null;
         ViewMenuPopup.IsOpen = false;
         SettingsMenuPopup.IsOpen = false;
         HelpMenuPopup.IsOpen = false;
@@ -536,33 +528,25 @@ public partial class MainWindow : Window
     {
         if (FileMenuPopup.IsOpen)
         {
-            _menuClosedByOverlayEscape = true;
             FileMenuPopup.IsOpen = false;
-            _menuJustClosedSource = null;
             BookButton.Focus();
             return true;
         }
         if (ViewMenuPopup.IsOpen)
         {
-            _menuClosedByOverlayEscape = true;
             ViewMenuPopup.IsOpen = false;
-            _menuJustClosedSource = null;
             EyeButton.Focus();
             return true;
         }
         if (SettingsMenuPopup.IsOpen)
         {
-            _menuClosedByOverlayEscape = true;
             SettingsMenuPopup.IsOpen = false;
-            _menuJustClosedSource = null;
             GearButton.Focus();
             return true;
         }
         if (HelpMenuPopup.IsOpen)
         {
-            _menuClosedByOverlayEscape = true;
             HelpMenuPopup.IsOpen = false;
-            _menuJustClosedSource = null;
             HelpButton.Focus();
             return true;
         }

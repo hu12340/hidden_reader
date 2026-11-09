@@ -1,4 +1,4 @@
-<Window x:Class="HiddenReader.App.UI.MainWindow"
+﻿<Window x:Class="HiddenReader.App.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -7,7 +7,10 @@
         Icon="/Assets/HiddenReader.ico"
         Width="900" Height="640"
         Background="#1E1F26"
-        Foreground="#E4E2DC">
+        Foreground="#E4E2DC"
+        PreviewMouseDown="OnWindowPreviewMouseDown"
+        Deactivated="OnWindowDeactivated"
+        LocationChanged="OnWindowLocationChanged">
     <!--
       自定义顶部栏（顶部菜单原型）：客户区内绘制整个标题栏。
       CaptionHeight 覆盖顶部栏高度，未标记 IsHitTestVisibleInChrome 的区域由系统
@@ -374,10 +377,13 @@
         </DockPanel>
     </Border>
 
-    <!-- 书架菜单弹层（置于窗口元素之外，避免参与布局） -->
+    <!-- 书架菜单弹层（置于窗口元素之外，避免参与布局）。
+         StaysOpen=True：外击收起由窗口级 PreviewMouseDown 显式处理（StaysOpen=False 的
+         自动外击关闭发生在按钮 PreviewMouseDown 之前且 Closed 事件迟到约 150ms，
+         无法在 Click 时区分「本次按下关闭」与「早前关闭」，导致快速往返切换竞态，见 D1）。 -->
     <Popup x:Name="FileMenuPopup" PlacementTarget="{Binding ElementName=BookButton}"
-           Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
-           Closed="OnFileMenuPopupClosed" VerticalOffset="4">
+           Placement="Bottom" StaysOpen="True" AllowsTransparency="True"
+           VerticalOffset="4">
         <Border Style="{StaticResource FlyoutBorder}" Width="308">
             <StackPanel>
                 <Button Click="OnImport" Style="{StaticResource CommandButton}" x:Name="ImportButton">
@@ -402,10 +408,10 @@
         </Border>
     </Popup>
 
-    <!-- 查看菜单弹层 -->
+    <!-- 查看菜单弹层（StaysOpen=True，理由同书架弹层） -->
     <Popup x:Name="ViewMenuPopup" PlacementTarget="{Binding ElementName=EyeButton}"
-           Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
-           Closed="OnViewMenuPopupClosed" VerticalOffset="4">
+           Placement="Bottom" StaysOpen="True" AllowsTransparency="True"
+           VerticalOffset="4">
         <Border Style="{StaticResource FlyoutBorder}" Width="204">
             <StackPanel>
                 <Button Click="OnToggleTocFromMenu" Style="{StaticResource CommandButton}">
@@ -428,10 +434,10 @@
         </Border>
     </Popup>
 
-    <!-- 设置菜单弹层 -->
+    <!-- 设置菜单弹层（StaysOpen=True，理由同书架弹层） -->
     <Popup x:Name="SettingsMenuPopup" PlacementTarget="{Binding ElementName=GearButton}"
-           Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
-           Closed="OnSettingsMenuPopupClosed" VerticalOffset="4">
+           Placement="Bottom" StaysOpen="True" AllowsTransparency="True"
+           VerticalOffset="4">
         <Border Style="{StaticResource FlyoutBorder}" Width="204">
             <StackPanel>
                 <Button Click="OnOpenReadingColors" Style="{StaticResource CommandButton}">
@@ -444,10 +450,10 @@
         </Border>
     </Popup>
 
-    <!-- 帮助菜单弹层 -->
+    <!-- 帮助菜单弹层（StaysOpen=True，理由同书架弹层） -->
     <Popup x:Name="HelpMenuPopup" PlacementTarget="{Binding ElementName=HelpButton}"
-           Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade"
-           Closed="OnHelpMenuPopupClosed" VerticalOffset="4">
+           Placement="Bottom" StaysOpen="True" AllowsTransparency="True"
+           VerticalOffset="4">
         <Border Style="{StaticResource FlyoutBorder}" Width="204">
             <StackPanel>
                 <Button Click="OnOpenGuide" Style="{StaticResource CommandButton}">
