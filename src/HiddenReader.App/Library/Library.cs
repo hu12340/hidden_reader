@@ -36,6 +36,11 @@ public sealed class BookState
 {
     /// <summary>当前页首的正文偏移量。</summary>
     public int Anchor { get; set; }
+    /// <summary>
+    /// 手动指定的文本编码键（null = 自动识别，键见 Library.EncodingChoices）。
+    /// 旧 library.json 缺该字段时保持 null，读取行为与旧版一致（UI-SPEC UI-04）。
+    /// </summary>
+    public string? Encoding { get; set; }
     public FloatState Float { get; set; } = new();
 }
 
@@ -416,36 +421,93 @@ public sealed class Library
         return state;
     }
 
+    /// <summary>编码切换入口提供的候选（显示名, 键）；键与 BookState.Encoding 对应，空串表示自动识别。</summary>
+    public static readonly (string DisplayName, string Key)[] EncodingChoices =
+    {
+        ("自动识别", ""),
+        ("UTF-8", "UTF-8"),
+        ("GB18030", "GB18030"),
+        ("Big5", "Big5"),
+        ("UTF-16 LE", "UTF-16LE"),
+    };
+
+    /// <summary>把 BookState.Encoding 键解析为解码器；GB18030/Big5 依赖 CodePagesEncodingProvider（App 启动已注册）。</summary>
+    public static System.Text.Encoding ResolveEncoding(string key) => key switch
+    {
+        "UTF-8" => new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        "GB18030" => System.Text.Encoding.GetEncoding("GB18030"),
+        "Big5" => System.Text.Encoding.GetEncoding("Big5"),
+        "UTF-16LE" => System.Text.Encoding.Unicode,
+        _ => throw new ArgumentException("未知编码键: " + key),
+    };
+
+    /// <summary>
+    /// 解码书库副本字节。encodingKey 为 null 或空串时走自动识别（BOM 优先，无 BOM 时
+    /// UTF-8 严格解码失败再回退 GB18030）；显式键按所选编码解码整个文件，
+    /// 与编码匹配的 BOM 前缀剥掉，避免正文出现 U+FEFF（REVIEW P0-4）。
+    /// </summary>
+    public static string DecodeCopy(byte[] bytes, string? encodingKey)
+    {
+        if (string.IsNullOrEmpty(encodingKey))
+        {
+            // BOM 优先：与原实现一致，带 BOM 的文件按 BOM 解码。
+            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+            {
+                return new UTF8Encoding(false).GetString(bytes, 3, bytes.Length - 3);
+            }
+            if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+            {
+                return System.Text.Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+            }
+            if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+            {
+                return System.Text.Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+            }
+
+            // 无 BOM：先按 UTF-8 严格解码；遇到无效字节（典型的 GB18030 内容）再回退。
+            // 不能依赖 StreamReader 的默认替换回退——它会把无效字节静默替换成 U+FFFD，
+            // 导致 GB18030 内容永远得不到尝试。
+            try
+            {
+                return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
+            }
+            catch (DecoderFallbackException)
+            {
+                return System.Text.Encoding.GetEncoding("GB18030").GetString(bytes);
+            }
+        }
+
+        var encoding = ResolveEncoding(encodingKey);
+        if (encodingKey == "UTF-8" && bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+        {
+            return encoding.GetString(bytes, 3, bytes.Length - 3);
+        }
+        if (encodingKey == "UTF-16LE" && bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+        {
+            return encoding.GetString(bytes, 2, bytes.Length - 2);
+        }
+        // 显式指定即按所选编码解码（解码失败的字节替换为 U+FFFD，不抛错）。
+        return encoding.GetString(bytes);
+    }
+
+    /// <summary>
+    /// 切换编码后的锚点重映射：字符数必然改变，按旧/新解码正文的 UTF-16 长度比例映射，
+    /// 并夹到 [0, 新长度]，不抛错、不越界（UI-SPEC 2.5-3 勘误，替代 REVIEW P0-4 验收②）。
+    /// </summary>
+    public static int RemapAnchor(int oldAnchor, int oldLength, int newLength)
+    {
+        if (newLength <= 0) return 0;
+        double clamped = Math.Clamp(oldAnchor, 0, Math.Max(0, oldLength));
+        return Math.Clamp((int)Math.Round(clamped / Math.Max(1, oldLength) * newLength), 0, newLength);
+    }
+
     /// <summary>读取书籍副本正文；副本存在即可打开，与原文件是否改名无关。</summary>
     public string ReadBook(BookInfo book)
     {
         string path = Path.Combine(BooksDir, book.FileName);
         byte[] bytes = File.ReadAllBytes(path);
-
-        // BOM 优先：与原实现一致，带 BOM 的文件按 BOM 解码。
-        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-        {
-            return new UTF8Encoding(false).GetString(bytes, 3, bytes.Length - 3);
-        }
-        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-        {
-            return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
-        }
-        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-        {
-            return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
-        }
-
-        // 无 BOM：先按 UTF-8 严格解码；遇到无效字节（典型的 GB18030 内容）再回退。
-        // 不能依赖 StreamReader 的默认替换回退——它会把无效字节静默替换成 U+FFFD，
-        // 导致 GB18030 内容永远得不到尝试。
-        try
-        {
-            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(bytes);
-        }
-        catch (DecoderFallbackException)
-        {
-            return Encoding.GetEncoding("GB18030").GetString(bytes);
-        }
+        // 手动指定的编码优先（乱码自救）；null 时自动识别。
+        string? manual = State.PerBook.TryGetValue(book.Id, out var bs) ? bs.Encoding : null;
+        return DecodeCopy(bytes, manual);
     }
 }

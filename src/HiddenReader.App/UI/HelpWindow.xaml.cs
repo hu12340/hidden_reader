@@ -50,6 +50,11 @@ public partial class HelpWindow : Window
             new Row("Ctrl+F", "在普通模式搜索当前小说。", TermIsKey: true),
             new Row("← / →", "正文窗口有焦点时向前／向后翻页。", TermIsKey: true),
             new Row("Esc", "收起菜单、关闭搜索栏，或在极简浮窗中返回普通模式。", TermIsKey: true),
+            // 浮窗三键此前不可发现（REVIEW P1-5）：仅浮窗有焦点时生效；F5/F6 为三档循环快捷方式，
+            // 连续调节走浮窗右键菜单的「背景/边框不透明度」面板（UI-03）。
+            new Row("F5", "仅浮窗有焦点时生效：循环背景不透明度 100%→50%→0%（三档快捷方式，连续调节用浮窗右键菜单）。", TermIsKey: true),
+            new Row("F6", "仅浮窗有焦点时生效：循环边框不透明度 100%→50%→0%（三档快捷方式，连续调节用浮窗右键菜单）。", TermIsKey: true),
+            new Row("F7", "仅浮窗有焦点时生效：切换浮窗置顶。", TermIsKey: true),
         });
 
     private static UIElement BuildRow(Row row)

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Width="420" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
-        Background="#1E1F26" Foreground="#E4E2DC">
+        Background="{StaticResource DialogWindowBrush}" Foreground="{StaticResource DialogForegroundBrush}">
     <!--
       帮助窗口（快速上手 / 键盘快捷键）：行内容由代码构建。
       「关闭」按钮 IsCancel=True 使 Esc 也能关闭窗口；窗口是独立 Window，
@@ -15,8 +15,8 @@
                    Visibility="Collapsed"/>
         <StackPanel x:Name="Body"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="关闭" Width="64" IsCancel="True" IsDefault="True"
-                    Background="#2C2E38" Foreground="#E4E2DC" BorderBrush="#4A4C58"
+            <Button Content="关闭" Width="64" Height="32" IsCancel="True" IsDefault="True"
+                    Style="{StaticResource DialogSecondaryButton}"
                     Padding="8,3"/>
         </StackPanel>
     </StackPanel>

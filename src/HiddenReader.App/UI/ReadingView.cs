@@ -19,6 +19,9 @@ public sealed class ReadingView : FrameworkElement
     private Point _downPoint;
     private SolidColorBrush _textBrush = CreateBrush(ReadingColors.Text);
     private SolidColorBrush _backgroundBrush = CreateBrush(ReadingColors.Background);
+    /// <summary>高亮调色板随配色解析（亮色背景用正文色派生，审查缺陷 #4）。</summary>
+    private PageRenderer.HighlightPalette _highlights =
+        PageRenderer.ResolveHighlightPalette(ReadingColors.Background, ReadingColors.Text);
 
     public event Action? SessionAdvanced;
     /// <summary>视图尺寸变化（重排保持位置后触发），宿主据此重新请求后台全书分页。</summary>
@@ -48,6 +51,7 @@ public sealed class ReadingView : FrameworkElement
     {
         _textBrush = CreateBrush(ReadingColors.Text);
         _backgroundBrush = CreateBrush(ReadingColors.Background);
+        _highlights = PageRenderer.ResolveHighlightPalette(ReadingColors.Background, ReadingColors.Text);
         InvalidateVisual();
     }
 
@@ -144,7 +148,7 @@ public sealed class ReadingView : FrameworkElement
             selection = new HighlightRange(Math.Min(_selectionAnchor, _selectionFocus), Math.Abs(_selectionFocus - _selectionAnchor));
         }
 
-        PageRenderer.DrawPage(dc, _page, _textBrush, CollectPageHighlights(_page), selection);
+        PageRenderer.DrawPage(dc, _page, _textBrush, CollectPageHighlights(_page), selection, _highlights);
     }
 
     private IReadOnlyList<HighlightRange> CollectPageHighlights(PageLayout page)
@@ -158,7 +162,10 @@ public sealed class ReadingView : FrameworkElement
             int hit = hits[i];
             if (hit + _session.SearchHitLength <= page.Start) continue;
             if (hit >= pageEnd) break;
-            ranges.Add(new HighlightRange(hit, _session.SearchHitLength));
+            // 当前聚焦命中与普通命中区分样式；叠放顺序由 PageRenderer 统一控制，
+            // 与浮窗的 CollectPageHighlights 产出相同区分（UI-SPEC UI-06）。
+            var kind = i == _session.ActiveSearchHit ? HighlightKind.Current : HighlightKind.Match;
+            ranges.Add(new HighlightRange(hit, _session.SearchHitLength, kind));
         }
         return ranges;
     }

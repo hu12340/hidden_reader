@@ -26,7 +26,14 @@ public sealed class PageLayout
     public double PixelsPerDip { get; init; }
 }
 
-public sealed record HighlightRange(int Start, int Length);
+/// <summary>高亮种类：普通命中、当前聚焦命中。叠放优先级 selection &gt; current &gt; match。</summary>
+public enum HighlightKind
+{
+    Match,
+    Current,
+}
+
+public sealed record HighlightRange(int Start, int Length, HighlightKind Kind = HighlightKind.Match);
 
 /// <summary>
 /// 按可用宽高把连续正文切分为页面。行与页边界都以正文 UTF-16 偏移量表达，

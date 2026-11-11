@@ -65,6 +65,14 @@ internal static class WindowPlacement
         return ix >= Math.Min(minVisiblePx, window.Width) && iy >= Math.Min(minVisiblePx, window.Height);
     }
 
+    /// <summary>
+    /// 物理矩形是否被工作区完整包含。浮窗菜单这类浮层要求全部命令可见可操作，
+    /// 部分相交（如越出右下边缘 80px 以上的情况）不算可见（审查缺陷 #6）。
+    /// </summary>
+    public static bool IsRectContainedInWorkArea(RECT rect, RECT workArea)
+        => rect.Left >= workArea.Left && rect.Top >= workArea.Top
+            && rect.Right <= workArea.Right && rect.Bottom <= workArea.Bottom;
+
     /// <summary>返回包含该矩形最近的显示器的工作区（物理像素）；查询失败返回 false。</summary>
     public static bool TryGetWorkAreaForRect(RECT rect, out RECT workArea)
     {

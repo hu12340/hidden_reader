@@ -12,8 +12,13 @@ public static class PageRenderer
 {
     // 默认暗黑主题：浅色文字 + 深色底。
     public static readonly Brush DefaultTextBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xE4, 0xE2, 0xDC)));
-    public static readonly Brush SearchHighlightBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x73, 0xE8, 0xA3, 0x3D)));
-    public static readonly Brush SelectionBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x59, 0x3D, 0x7B, 0xE8)));
+    // 命中与选区高亮（UI-SPEC 1.1 tokens）：普通命中弱化、当前命中更亮、选区最亮，
+    // 叠放顺序 selection > current > match。亮色自定义背景上蓝色叠加不可辨，
+    // ResolveHighlightPalette 会改用正文色派生（审查缺陷 #4）。
+    public static readonly Brush MatchHighlightBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x33, 0xA3, 0xC8, 0xFF)));
+    public static readonly Brush CurrentHighlightBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x6B, 0xA3, 0xC8, 0xFF)));
+    public static readonly Brush SelectionBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x80, 0x6F, 0xA8, 0xF5)));
+    public static readonly HighlightPalette DefaultHighlights = new(MatchHighlightBrush, CurrentHighlightBrush, SelectionBrush);
 
     private static Brush Freeze(Brush brush)
     {
@@ -21,28 +26,69 @@ public static class PageRenderer
         return brush;
     }
 
+    /// <summary>一组高亮画刷：普通命中 / 当前命中 / 选区。</summary>
+    public sealed record HighlightPalette(Brush Match, Brush Current, Brush Selection);
+
+    // 缓存键必须同时包含背景与正文色：派生画刷取正文色，只按背景缓存会让
+    // 「先把背景与正文设为同色、再只改正文色」拿到同色画刷（审查缺陷 #4）。
+    private static readonly Dictionary<(Color Background, Color Text), HighlightPalette> HighlightCache = new();
+    /// <summary>缓存条目上限：配色面板拖动滑杆会逐帧预览，避免缓存无限增长。</summary>
+    private const int HighlightCacheLimit = 64;
+
+    /// <summary>
+    /// 按阅读背景与正文色解析高亮调色板。深色背景沿用默认蓝 token；亮色背景上蓝叠加几乎不可辨
+    /// （如 #A3C8FF 背景，审查缺陷 #4），改用正文色派生：深色正文 → 深色高亮依然可辨。
+    /// alpha 结构（0x33/0x6B/0x80）与叠放顺序 selection &gt; current &gt; match 保持不变。
+    /// </summary>
+    public static HighlightPalette ResolveHighlightPalette(Color background, Color textColor)
+    {
+        var key = (background, textColor);
+        if (HighlightCache.TryGetValue(key, out var cached)) return cached;
+        double luminance = (0.299 * background.R + 0.587 * background.G + 0.114 * background.B) / 255.0;
+        var palette = DefaultHighlights;
+        if (luminance >= 0.5)
+        {
+            var match = Freeze(new SolidColorBrush(Color.FromArgb(0x33, textColor.R, textColor.G, textColor.B)));
+            var current = Freeze(new SolidColorBrush(Color.FromArgb(0x6B, textColor.R, textColor.G, textColor.B)));
+            var selection = Freeze(new SolidColorBrush(Color.FromArgb(0x80, textColor.R, textColor.G, textColor.B)));
+            palette = new HighlightPalette(match, current, selection);
+        }
+        if (HighlightCache.Count >= HighlightCacheLimit) HighlightCache.Clear();
+        HighlightCache[key] = palette;
+        return palette;
+    }
+
     public static void DrawPage(
         DrawingContext dc,
         PageLayout page,
         Brush textBrush,
         IReadOnlyList<HighlightRange>? searchHighlights = null,
-        HighlightRange? selection = null)
+        HighlightRange? selection = null,
+        HighlightPalette? highlights = null)
     {
         double padding = page.Settings.Padding;
         double lineHeight = page.Settings.LineHeight;
         var typeface = page.Settings.CreateTypeface();
+        var palette = highlights ?? DefaultHighlights;
 
         if (searchHighlights is { Count: > 0 })
         {
+            // 先画普通命中再画当前命中，保证当前命中盖在普通命中之上。
             foreach (var highlight in searchHighlights)
             {
-                DrawRangeBackground(dc, page, highlight, SearchHighlightBrush, padding, lineHeight, typeface);
+                if (highlight.Kind == HighlightKind.Match)
+                    DrawRangeBackground(dc, page, highlight, palette.Match, padding, lineHeight, typeface);
+            }
+            foreach (var highlight in searchHighlights)
+            {
+                if (highlight.Kind == HighlightKind.Current)
+                    DrawRangeBackground(dc, page, highlight, palette.Current, padding, lineHeight, typeface);
             }
         }
 
         if (selection is { Length: > 0 } sel)
         {
-            DrawRangeBackground(dc, page, sel, SelectionBrush, padding, lineHeight, typeface);
+            DrawRangeBackground(dc, page, sel, palette.Selection, padding, lineHeight, typeface);
         }
 
         foreach (var line in page.Lines)

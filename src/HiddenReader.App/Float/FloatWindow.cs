@@ -36,23 +36,12 @@ internal sealed class FloatWindow : IDisposable
     private const int WM_DPICHANGED = 0x02E0;
 
     private const int ID_TOPMOST = 100;
-    private const int ID_BG_0 = 110;
-    private const int ID_BG_50 = 111;
-    private const int ID_BG_100 = 112;
-    private const int ID_BORDER_0 = 120;
-    private const int ID_BORDER_50 = 121;
-    private const int ID_BORDER_100 = 122;
+    private const int ID_BG_OPACITY = 110;
+    private const int ID_BORDER_OPACITY = 120;
     private const int ID_COLORS = 125;
     private const int ID_FONT_SIZE = 126;
     private const int ID_NORMAL = 130;
     private const int ID_EXIT = 140;
-
-    private const int TPM_RETURNCMD = 0x0100;
-    private const int TPM_RIGHTBUTTON = 0x0002;
-    private const uint MF_STRING = 0x0000;
-    private const uint MF_SEPARATOR = 0x0800;
-    private const uint MF_CHECKED = 0x0008;
-    private const uint MF_UNCHECKED = 0x0000;
 
     private static readonly object ClassLock = new();
     private static readonly Dictionary<IntPtr, FloatWindow> Instances = new();
@@ -105,18 +94,6 @@ internal sealed class FloatWindow : IDisposable
     private static extern bool SetForegroundWindow(IntPtr hwnd);
 
     [DllImport("user32.dll")]
-    private static extern IntPtr CreatePopupMenu();
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    private static extern bool AppendMenuW(IntPtr menu, uint flags, IntPtr id, string text);
-
-    [DllImport("user32.dll")]
-    private static extern int TrackPopupMenu(IntPtr menu, uint flags, int x, int y, int reserved, IntPtr hwnd, IntPtr rect);
-
-    [DllImport("user32.dll")]
-    private static extern bool DestroyMenu(IntPtr menu);
-
-    [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT point);
 
     [DllImport("user32.dll")]
@@ -130,6 +107,14 @@ internal sealed class FloatWindow : IDisposable
 
     [DllImport("user32.dll")]
     private static extern short GetKeyState(int key);
+
+    /// <summary>异步键状态：用于判断「菜单关闭的这一刻」左键是否真按下（不受消息队列影响）。</summary>
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int key);
+
+    /// <summary>前台窗口：失活关闭时用来区分「切到浮窗」和「切到其他应用」。</summary>
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandle(string? name);
@@ -201,12 +186,32 @@ internal sealed class FloatWindow : IDisposable
     private int _downX;
     private int _downY;
     private bool _disposed;
+    /// <summary>当前打开的自绘菜单。</summary>
+    private FloatMenuWindow? _menu;
+    private bool _menuOpen;
+    /// <summary>
+    /// 菜单因失活关闭时记录的「致关闭的那次左键按下」的屏幕坐标；null 表示没有这样的按下。
+    /// 点击浮窗本体时激活转移先于 WM_LBUTTONDOWN，本次按下只负责关菜单，不得进入选区/翻页路径。
+    /// 只有关闭那一刻左键确实按下且光标在浮窗内才记录：Alt+Tab 或点击其他应用同样让菜单失活，
+    /// 但没有按下落到浮窗，记录后会吞掉返回浮窗后的第一次独立点击（审查缺陷 #5）。
+    /// 命中一次即清空，之后的独立点击正常翻页。
+    /// </summary>
+    private POINT? _menuClosePressPoint;
+    private const int VkLeftButton = 0x01;
     /// <summary>正文文字画刷：来自应用级阅读配色，与普通模式共用。</summary>
     private SolidColorBrush _textBrush = CreateBrush(ReadingColors.Text);
+    /// <summary>高亮调色板随配色解析（亮色背景用正文色派生，审查缺陷 #4），与普通模式一致。</summary>
+    private PageRenderer.HighlightPalette _highlights =
+        PageRenderer.ResolveHighlightPalette(ReadingColors.Background, ReadingColors.Text);
 
     public bool Topmost { get; private set; }
+    /// <summary>已确认的背景不透明度（0-1）。面板草稿期间 CaptureState 仍返回确认值，
+    /// 因此预览期间翻页等其他状态保存只写已确认值（UI-SPEC UI-03）。</summary>
     public double BackgroundOpacity { get; private set; }
+    /// <summary>已确认的边框不透明度（0-1）。</summary>
     public double BorderOpacity { get; private set; }
+    /// <summary>不透明度面板草稿：非 null 时渲染用草稿值，「确定」转正、「取消」丢弃。</summary>
+    private (double Background, double Border)? _opacityDraft;
 
     /// <summary>返回普通模式请求（浮窗保持打开，等待再次进入或退出）。</summary>
     public event Action? ReturnToNormalRequested;
@@ -217,6 +222,8 @@ internal sealed class FloatWindow : IDisposable
     /// <summary>右键菜单请求打开阅读配色面板：宿主以浮窗为宿主窗口打开同一个面板。</summary>
     public event Action? ReadingColorsRequested;
     public event Action? ReadingFontSizeRequested;
+    /// <summary>右键菜单请求打开不透明度面板：参数为真时初始聚焦背景滑杆，否则聚焦边框。</summary>
+    public event Action<bool>? OpacityPanelRequested;
 
     public IntPtr Handle => _hwnd;
 
@@ -282,6 +289,7 @@ internal sealed class FloatWindow : IDisposable
     {
         if (_disposed) return;
         _textBrush = CreateBrush(ReadingColors.Text);
+        _highlights = PageRenderer.ResolveHighlightPalette(ReadingColors.Background, ReadingColors.Text);
         Render();
     }
 
@@ -431,6 +439,28 @@ internal sealed class FloatWindow : IDisposable
 
     private void OnLeftDown(IntPtr lParam)
     {
+        if (_menuOpen)
+        {
+            // 菜单开着：本次按下只负责关菜单，不进入选区/翻页路径。
+            _menu?.Close();
+            // Close() 内已按「失活关闭」记录过这次按下的坐标；既然本次按下已在这里被吞，
+            // 记录必须作废，否则同一位置的下一击（用户常在同一处继续翻页）会再被吞一次。
+            _menuClosePressPoint = null;
+            return;
+        }
+        if (_menuClosePressPoint is POINT closingPress)
+        {
+            _menuClosePressPoint = null;
+            // 菜单刚因「落在浮窗内的左键按下」失活关闭：本次按下就是导致关闭的那次点击，
+            // 吞掉它，紧随其后的独立点击正常翻页（审查缺陷 #5）。
+            // 坐标与记录不同则说明是之后的一次独立点击（记录的那次没有派发到这里），正常处理。
+            if (GetCursorPos(out var now)
+                && Math.Abs(now.X - closingPress.X) <= 3 && Math.Abs(now.Y - closingPress.Y) <= 3)
+            {
+                Diagnostics.Log("float menu closing press swallowed");
+                return;
+            }
+        }
         SetFocus(_hwnd);
         int x = (short)(lParam.ToInt64() & 0xFFFF);
         int y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
@@ -544,6 +574,9 @@ internal sealed class FloatWindow : IDisposable
 
     private void OnKeyDown(int key)
     {
+        // 键盘输入说明致关闭的那次按下并没有派发到这里（Esc/命令/切走后返回）：
+        // 清掉记录，避免残留标记吞掉之后的正文点击。
+        _menuClosePressPoint = null;
         switch (key)
         {
             case 0x25: // left
@@ -566,13 +599,15 @@ internal sealed class FloatWindow : IDisposable
             case 0x43: // C
                 if ((GetKeyState(0x11) & 0x8000) != 0) CopySelection();
                 break;
-            case 0x74: // F5 背景不透明度 100→50→0
+            case 0x74: // F5 背景不透明度 100→50→0（三档快捷方式保留）
+                _opacityDraft = null; // 确认值变化后丢弃可能残留的面板草稿
                 BackgroundOpacity = BackgroundOpacity >= 0.99 ? 0.5 : (BackgroundOpacity <= 0.01 ? 1.0 : 0.0);
                 Diagnostics.Log($"opacity bg={BackgroundOpacity} border={BorderOpacity} topmost={Topmost}");
                 StateChanged?.Invoke();
                 Render();
                 break;
-            case 0x75: // F6 边框不透明度 100→50→0
+            case 0x75: // F6 边框不透明度 100→50→0（三档快捷方式保留）
+                _opacityDraft = null;
                 BorderOpacity = BorderOpacity >= 0.99 ? 0.5 : (BorderOpacity <= 0.01 ? 1.0 : 0.0);
                 Diagnostics.Log($"opacity bg={BackgroundOpacity} border={BorderOpacity} topmost={Topmost}");
                 StateChanged?.Invoke();
@@ -587,6 +622,8 @@ internal sealed class FloatWindow : IDisposable
     /// <summary>滚轮连续滚动正文，可停在整页边界之间；与普通模式共用 ReadingSession 滚动语义。</summary>
     private void OnMouseWheel(int delta)
     {
+        // 滚轮是独立输入：清掉菜单关闭时残留的按下记录。
+        _menuClosePressPoint = null;
         int notches = delta / 120;
         if (notches == 0 && delta != 0) notches = Math.Sign(delta);
         if (notches == 0) return;
@@ -606,33 +643,85 @@ internal sealed class FloatWindow : IDisposable
 
     private void ShowContextMenu()
     {
+        // 菜单已开时忽略重复右键。
+        if (_menuOpen) return;
+        // 重新开菜单：上一次残留的关闭按下记录不应影响这一次的点击。
+        _menuClosePressPoint = null;
         GetCursorPos(out var screen);
-        IntPtr menu = CreatePopupMenu();
-        try
+        var rows = new List<FloatMenuRow>
         {
-            AppendMenuW(menu, MF_STRING | (Topmost ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_TOPMOST), "置顶");
-            AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, string.Empty);
-            AppendMenuW(menu, MF_STRING | (BackgroundOpacity <= 0.01 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BG_0), "背景不透明度 0%");
-            AppendMenuW(menu, MF_STRING | (Math.Abs(BackgroundOpacity - 0.5) < 0.01 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BG_50), "背景不透明度 50%");
-            AppendMenuW(menu, MF_STRING | (BackgroundOpacity >= 0.99 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BG_100), "背景不透明度 100%");
-            AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, string.Empty);
-            AppendMenuW(menu, MF_STRING | (BorderOpacity <= 0.01 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BORDER_0), "边框不透明度 0%");
-            AppendMenuW(menu, MF_STRING | (Math.Abs(BorderOpacity - 0.5) < 0.01 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BORDER_50), "边框不透明度 50%");
-            AppendMenuW(menu, MF_STRING | (BorderOpacity >= 0.99 ? MF_CHECKED : MF_UNCHECKED), new IntPtr(ID_BORDER_100), "边框不透明度 100%");
-            AppendMenuW(menu, MF_SEPARATOR, IntPtr.Zero, string.Empty);
-            AppendMenuW(menu, MF_STRING, new IntPtr(ID_COLORS), "阅读配色…");
-            AppendMenuW(menu, MF_STRING, new IntPtr(ID_FONT_SIZE), "正文字号…");
-            AppendMenuW(menu, MF_STRING, new IntPtr(ID_NORMAL), "返回普通模式");
-            AppendMenuW(menu, MF_STRING, new IntPtr(ID_EXIT), "退出");
+            new(FloatMenuRowKind.GroupLabel, text: "显示"),
+            new(FloatMenuRowKind.Command, ID_BG_OPACITY, "背景不透明度",
+                suffix: ToPercent(BackgroundOpacity), accentSuffix: true),
+            new(FloatMenuRowKind.Command, ID_BORDER_OPACITY, "边框不透明度",
+                suffix: ToPercent(BorderOpacity), accentSuffix: true),
+            new(FloatMenuRowKind.Command, ID_COLORS, "阅读配色…"),
+            new(FloatMenuRowKind.Command, ID_FONT_SIZE, "正文字号…"),
+            new(FloatMenuRowKind.GroupLabel, text: "窗口"),
+            new(FloatMenuRowKind.Command, ID_TOPMOST, "置顶", @checked: Topmost),
+            new(FloatMenuRowKind.Command, ID_NORMAL, "返回普通模式", suffix: "Esc"),
+            new(FloatMenuRowKind.Separator),
+            new(FloatMenuRowKind.Command, ID_EXIT, "退出", danger: true),
+        };
 
-            SetForegroundWindow(_hwnd);
-            int command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, screen.X, screen.Y, 0, _hwnd, IntPtr.Zero);
-            if (command != 0) HandleCommand(command);
-        }
-        finally
+        // 深色自绘浮层（UI-11+UI-12）：先按估算尺寸在物理像素里夹回工作区，
+        // 用完整包含判定（部分相交不算可见，审查缺陷 #6）；菜单实际渲染后还会按
+        // 真实尺寸校正一次（见 FloatMenuWindow）。
+        double scale = GetDpiForWindow(_hwnd) / 96.0;
+        int estW = (int)Math.Round(FloatMenuWindow.EstimatedWidth * scale);
+        int estH = (int)Math.Round(FloatMenuWindow.EstimateHeight(rows) * scale);
+        int shadow = (int)Math.Round(16 * scale);
+        int x = screen.X - shadow, y = screen.Y - shadow;
+        var desired = new WindowPlacement.RECT { Left = x, Top = y, Right = x + estW, Bottom = y + estH };
+        if (WindowPlacement.TryGetWorkAreaForRect(desired, out var workArea)
+            && !WindowPlacement.IsRectContainedInWorkArea(desired, workArea))
         {
-            DestroyMenu(menu);
+            var clamped = WindowPlacement.ClampIntoWorkArea(desired, workArea);
+            x = clamped.Left;
+            y = clamped.Top;
         }
+
+        var menu = new FloatMenuWindow(rows, scale, Topmost, _hwnd, x / scale, y / scale);
+        _menu = menu;
+        _menuOpen = true;
+        menu.ItemActivated += HandleCommand;
+        menu.Closed += (_, _) =>
+        {
+            _menuOpen = false;
+            _menu = null;
+            // 只有「点击浮窗本体」造成的失活才记录致关闭的那次左键按下：它会在激活转移后
+            // 派发到浮窗，需吞掉以免误翻页。Esc/命令关闭、Alt+Tab 或点击其他应用都没有
+            // 落到浮窗的按下，不记录——返回浮窗后的第一次独立点击立即生效（审查缺陷 #5）。
+            _menuClosePressPoint = menu.ClosedByDeactivation ? CaptureMenuClosingPress() : null;
+            Diagnostics.Log($"float menu closed: deactivation={menu.ClosedByDeactivation} closingPress={(_menuClosePressPoint is null ? "none" : "on-window")}");
+            // 菜单命令执行后焦点返回浮窗，保证 Esc/方向键继续生效；
+            // 用户切去其他应用导致的失活关闭不抢焦点。
+            if (!menu.ClosedByDeactivation) FocusWindow();
+        };
+        menu.Show();
+        menu.FocusFirstItem();
+    }
+
+    /// <summary>
+    /// 菜单失活关闭的这一刻，判定是否真有「落在浮窗内的左键按下」造成它：
+    /// 光标在浮窗矩形内，且这次失活把前台交给了浮窗（或左键仍按下）。
+    /// 点击其他应用或 Alt+Tab 时前台在别处、光标也不在浮窗内，返回 null，后续点击不被吞。
+    /// </summary>
+    private POINT? CaptureMenuClosingPress()
+    {
+        // GetKeyState 反映线程最近取到的消息的按键状态；在 WM_LBUTTONDOWN 处理栈内两者都为按下。
+        bool keyState = (GetKeyState(VkLeftButton) & 0x8000) != 0;
+        bool asyncState = (GetAsyncKeyState(VkLeftButton) & 0x8000) != 0;
+        // 失活先于按下派发时键状态已回到抬起（自动化点击尤其明显），此时前台已切到浮窗，
+        // 仍可判定是这次按下造成的关闭；切换其他应用的前台不是浮窗。
+        bool activatedFloat = GetForegroundWindow() == _hwnd;
+        if (!GetCursorPos(out var point)) return null;
+        if (!GetWindowRect(_hwnd, out var rect)) return null;
+        bool inside = point.X >= rect.Left && point.X < rect.Right && point.Y >= rect.Top && point.Y < rect.Bottom;
+        Diagnostics.Log($"menu closing press probe: keyState={keyState} asyncState={asyncState} activatedFloat={activatedFloat} cursor=({point.X},{point.Y}) rect={rect.Left},{rect.Top}..{rect.Right},{rect.Bottom}");
+        if (!inside) return null;
+        if (!keyState && !asyncState && !activatedFloat) return null;
+        return point;
     }
 
     private void HandleCommand(int command)
@@ -643,12 +732,12 @@ internal sealed class FloatWindow : IDisposable
             case ID_TOPMOST:
                 SetTopmost(!Topmost);
                 return;
-            case ID_BG_0: BackgroundOpacity = 0; break;
-            case ID_BG_50: BackgroundOpacity = 0.5; break;
-            case ID_BG_100: BackgroundOpacity = 1; break;
-            case ID_BORDER_0: BorderOpacity = 0; break;
-            case ID_BORDER_50: BorderOpacity = 0.5; break;
-            case ID_BORDER_100: BorderOpacity = 1; break;
+            case ID_BG_OPACITY:
+                OpacityPanelRequested?.Invoke(true);
+                return;
+            case ID_BORDER_OPACITY:
+                OpacityPanelRequested?.Invoke(false);
+                return;
             case ID_COLORS:
                 ReadingColorsRequested?.Invoke();
                 return;
@@ -664,6 +753,42 @@ internal sealed class FloatWindow : IDisposable
         }
         StateChanged?.Invoke();
         Render();
+    }
+
+    /// <summary>0-1 不透明度显示为整数百分比（菜单行尾实时数值）。</summary>
+    private static string ToPercent(double value) => $"{(int)Math.Round(Math.Clamp(value, 0, 1) * 100)}%";
+
+    /// <summary>面板草稿实时预览：只改渲染，不写确认值、不触发状态保存。</summary>
+    public void PreviewOpacity(double background, double border)
+    {
+        _opacityDraft = (Math.Clamp(background, 0, 1), Math.Clamp(border, 0, 1));
+        Render();
+    }
+
+    /// <summary>「确定」：草稿值转确认值并触发状态保存（沿用 Library.Save 原子写入）。</summary>
+    public void CommitOpacity(double background, double border)
+    {
+        _opacityDraft = null;
+        BackgroundOpacity = Math.Clamp(background, 0, 1);
+        BorderOpacity = Math.Clamp(border, 0, 1);
+        Diagnostics.Log($"opacity bg={BackgroundOpacity} border={BorderOpacity} topmost={Topmost}");
+        StateChanged?.Invoke();
+        Render();
+    }
+
+    /// <summary>「取消」或面板被外部关闭：丢弃草稿，恢复确认值渲染。</summary>
+    public void CancelOpacityPreview()
+    {
+        if (_opacityDraft is null) return;
+        _opacityDraft = null;
+        Render();
+    }
+
+    /// <summary>菜单命令或面板结束后把焦点交回浮窗，保证 Esc/方向键继续生效（UI-SPEC UI-12）。</summary>
+    public void FocusWindow()
+    {
+        SetForegroundWindow(_hwnd);
+        SetFocus(_hwnd);
     }
 
     private void CopySelection()
@@ -749,8 +874,11 @@ internal sealed class FloatWindow : IDisposable
 
         // 正文底色取应用级阅读配色（需求第 7 节）：RGB 来自所选背景色，Alpha 只由背景不透明度决定，
         // 因此 100% 为所选颜色、50% 与后方画面混合、0% 完全透出；文字与边框的不透明度各自独立。
+        // 面板草稿期间渲染用草稿值，确认值不动（其他状态保存仍写确认值）。
+        double bgOpacity = _opacityDraft?.Background ?? BackgroundOpacity;
+        double borderOpacity = _opacityDraft?.Border ?? BorderOpacity;
         Color backgroundColor = ReadingColors.Background;
-        var background = Color.FromArgb((byte)Math.Round(BackgroundOpacity * 255),
+        var background = Color.FromArgb((byte)Math.Round(bgOpacity * 255),
             backgroundColor.R, backgroundColor.G, backgroundColor.B);
         if (background.A > 0)
         {
@@ -763,18 +891,18 @@ internal sealed class FloatWindow : IDisposable
             selection = new HighlightRange(Math.Min(_selectionAnchor, _selectionFocus), Math.Abs(_selectionFocus - _selectionAnchor));
         }
 
-        PageRenderer.DrawPage(dc, page, _textBrush, CollectPageHighlights(page), selection);
+        PageRenderer.DrawPage(dc, page, _textBrush, CollectPageHighlights(page), selection, _highlights);
 
-        if (BorderOpacity > 0.001)
+        if (borderOpacity > 0.001)
         {
-            var pen = new Pen(new SolidColorBrush(Color.FromArgb((byte)Math.Round(BorderOpacity * 255), 0x8A, 0x8A, 0x99)), 1.5);
+            var pen = new Pen(new SolidColorBrush(Color.FromArgb((byte)Math.Round(borderOpacity * 255), 0x8A, 0x8A, 0x99)), 1.5);
             pen.Freeze();
             double inset = 1.5;
             dc.DrawRectangle(null, pen, new Rect(inset, inset, Math.Max(0, width - inset * 2), Math.Max(0, height - inset * 2)));
         }
     }
 
-    /// <summary>当前页内的搜索命中区间（含聚焦命中）。</summary>
+    /// <summary>当前页内的搜索命中区间：当前聚焦命中与普通命中区分样式，与普通窗口一致。</summary>
     private IReadOnlyList<HighlightRange> CollectPageHighlights(PageLayout page)
     {
         if (_session.SearchHits.Count == 0) return Array.Empty<HighlightRange>();
@@ -785,7 +913,8 @@ internal sealed class FloatWindow : IDisposable
             int hit = _session.SearchHits[i];
             if (hit + _session.SearchHitLength <= page.Start) continue;
             if (hit >= pageEnd) break;
-            ranges.Add(new HighlightRange(hit, _session.SearchHitLength));
+            var kind = i == _session.ActiveSearchHit ? HighlightKind.Current : HighlightKind.Match;
+            ranges.Add(new HighlightRange(hit, _session.SearchHitLength, kind));
         }
         return ranges;
     }

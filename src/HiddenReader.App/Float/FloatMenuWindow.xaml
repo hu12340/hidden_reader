@@ -1,0 +1,68 @@
+<Window x:Class="HiddenReader.App.Float.FloatMenuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HiddenReader 浮窗菜单" WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent" ShowInTaskbar="False" ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight" ShowActivated="True">
+    <!--
+      浮窗右键菜单（UI-SPEC 2.3 / UI-11+UI-12）：替代 Win32 TrackPopupMenu 的深色自绘浮层。
+      宽 220、底 bg.surface、描边 border.control、圆角 8、内距 5、阴影 0 8/24 · 45% 黑。
+      命令行 32 高、圆角 5，悬停/键盘焦点底 hoverCommand，焦点项另加左侧 2px accent 竖条；
+      任意系统主题下均为深色，不随系统配色变化。
+    -->
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <!-- 菜单命令行：悬停与键盘焦点同底色，焦点项加左侧 2px accent 竖条 -->
+        <Style x:Key="FloatMenuCommand" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#E5E8EE"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="9,0"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="5">
+                            <Grid>
+                                <Border x:Name="Bar" Width="2" HorizontalAlignment="Left"
+                                        Margin="0,6,0,6" Background="#6FA8F5" Visibility="Collapsed"/>
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#31394A"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#31394A"/>
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- 分组标签（10/16 Medium text.muted） -->
+        <Style x:Key="FloatGroupLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#7E8896"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Height" Value="16"/>
+            <Setter Property="Margin" Value="9,4,9,2"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="16">
+        <Border Background="#242A35" BorderBrush="#414B5C" BorderThickness="1" CornerRadius="8"
+                Padding="5" Width="220">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="24" ShadowDepth="8" Direction="270" Color="Black" Opacity="0.45"/>
+            </Border.Effect>
+            <StackPanel x:Name="ItemsHost"/>
+        </Border>
+    </Grid>
+</Window>

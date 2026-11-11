@@ -119,7 +119,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- 菜单命令行（弹层内整行按钮） -->
+        <!-- 菜单命令行（弹层内整行按钮）；键盘焦点态与 2.3 焦点项一致：hoverCommand 底 + 左侧 2px accent 竖条 -->
         <Style x:Key="CommandButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#E5E8EE"/>
@@ -134,11 +134,19 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="5"
                                 Padding="{TemplateBinding Padding}">
-                            <ContentPresenter VerticalAlignment="Center"/>
+                            <Grid>
+                                <Border x:Name="FocusBar" Width="2" HorizontalAlignment="Left"
+                                        Margin="0,6,0,6" Background="#6FA8F5" Visibility="Collapsed"/>
+                                <ContentPresenter VerticalAlignment="Center"/>
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#31394A"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#31394A"/>
+                                <Setter TargetName="FocusBar" Property="Visibility" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -194,32 +202,59 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- 书架行：书名整行按钮 + 独立 × -->
+        <!-- 书架行：50 高两行（书名 + 进度），移除按钮仅悬停行显示（UI-SPEC 2.2）。
+             进度未就绪时下行留空占位，行高稳定不跳动。 -->
         <DataTemplate x:Key="ShelfItemTemplate">
-            <Border x:Name="Row" CornerRadius="5" Background="Transparent">
+            <Border x:Name="Row" CornerRadius="5" Background="Transparent" Height="50">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="30"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Button Click="OnShelfBookClick" Style="{StaticResource CommandButton}"
-                            ToolTip="{Binding Book.Title}" Height="34">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Path Data="{StaticResource BookIcon}" Style="{StaticResource MenuIcon}" Margin="0,0,8,0"/>
-                            <TextBlock Grid.Column="1" Text="{Binding Book.Title}"
-                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="2" Text="✓" Foreground="#9BC4FF" Margin="8,0,2,0"
-                                       Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}"/>
+                            ToolTip="{Binding Book.Title}" Height="50" Padding="9,0">
+                        <Button.ContextMenu>
+                            <!-- 编码切换入口（UI-04）：条目二级位置，只重新解码书库副本 -->
+                            <ContextMenu>
+                                <MenuItem Header="编码…" Click="OnShelfEncodingClick"/>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                        <Grid Margin="0,5,0,5">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Path Data="{StaticResource BookIcon}" Style="{StaticResource MenuIcon}" Margin="0,0,8,0"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Book.Title}" FontSize="13"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="2" Text="✓" Foreground="#9BC4FF" FontSize="14" Margin="8,0,2,0"
+                                           VerticalAlignment="Center"
+                                           Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
+                            <TextBlock x:Name="ProgressText" Grid.Row="1" Text="{Binding ProgressText}" FontSize="11"
+                                       Height="14" Margin="24,1,0,0" TextTrimming="CharacterEllipsis"
+                                       Foreground="#7E8896">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                <Setter Property="Foreground" Value="#9BC4FF"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </Grid>
                     </Button>
                     <Button Grid.Column="1" x:Name="RemoveButton" Click="OnShelfRemoveClick" Tag="{Binding Book}"
-                            ToolTip="从书架移除" Height="29" Width="30"
-                            Style="{StaticResource RemoveButton}" Padding="0">
+                            ToolTip="从书架移除" Height="22" Width="22" VerticalAlignment="Center" Margin="4,0,2,0"
+                            Style="{StaticResource RemoveButton}" Padding="0" Visibility="Hidden">
                         <Path Data="{StaticResource CloseIcon}" Style="{StaticResource GlyphIcon}" Width="12" Height="12"/>
                     </Button>
                 </Grid>
@@ -230,7 +265,69 @@
                 </DataTrigger>
                 <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
                     <Setter TargetName="Row" Property="Background" Value="#303845"/>
+                    <Setter TargetName="RemoveButton" Property="Visibility" Value="Visible"/>
                 </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <!-- 目录行容器：选中态用弹层命令悬停色，替代系统蓝底 -->
+        <Style x:Key="TocItemContainer" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#31394A"/>
+                            </Trigger>
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsSelected" Value="False"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="#31394A"/>
+                            </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- 目录行：当前章 54 高 + 左侧 2px 指示条；普通章 34 高，已读/未读以当前章为界（UI-SPEC 2.1） -->
+        <DataTemplate x:Key="TocItemTemplate">
+            <Grid x:Name="Row" Height="34" Background="Transparent">
+                <Grid x:Name="NormalContent" Margin="14,0,8,0">
+                    <TextBlock x:Name="NormalText" Text="{Binding FullTitle}" FontSize="13"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                               Foreground="#A9B3C2"/>
+                </Grid>
+                <Grid x:Name="CurrentContent" Height="54" Visibility="Collapsed">
+                    <Border Width="2" HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                            Background="#6FA8F5"/>
+                    <StackPanel Margin="12,8,8,0">
+                        <TextBlock x:Name="CurrentNumber" Text="{Binding Number}" FontSize="11"
+                                   Foreground="#9BC4FF"/>
+                        <TextBlock x:Name="CurrentTitle" Text="{Binding Title}" FontSize="13"
+                                   FontWeight="Medium" Foreground="#E4E2DC"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                    <Setter TargetName="Row" Property="Height" Value="54"/>
+                    <Setter TargetName="Row" Property="Background" Value="#263954"/>
+                    <Setter TargetName="NormalContent" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="CurrentContent" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsRead}" Value="True">
+                    <Setter TargetName="NormalText" Property="Foreground" Value="#7C8794"/>
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
     </Window.Resources>
@@ -251,23 +348,23 @@
                     <Button x:Name="EyeButton" DockPanel.Dock="Left" Width="32" Padding="0"
                             Style="{StaticResource TopBarButton}" Click="OnViewMenuClick"
                             ToolTip="查看" AutomationProperties.Name="查看">
-                        <Path Data="{StaticResource EyeIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                            <Path Data="{StaticResource EyeIcon}" x:Name="EyeGlyph" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
                     </Button>
                     <Button x:Name="GearButton" DockPanel.Dock="Left" Width="32" Padding="0"
                             Style="{StaticResource TopBarButton}" Click="OnSettingsMenuClick"
                             ToolTip="设置" AutomationProperties.Name="设置">
-                        <Path Data="{StaticResource GearIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                            <Path Data="{StaticResource GearIcon}" x:Name="GearGlyph" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
                     </Button>
                     <Button x:Name="HelpButton" DockPanel.Dock="Left" Width="32" Padding="0"
                             Style="{StaticResource TopBarButton}" Click="OnHelpMenuClick"
                             ToolTip="帮助" AutomationProperties.Name="帮助">
-                        <Path Data="{StaticResource HelpIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                            <Path Data="{StaticResource HelpIcon}" x:Name="HelpGlyph" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
                     </Button>
                     <!-- 极简浮窗：左侧图标组的最后一项 -->
                     <Button x:Name="FloatButton" DockPanel.Dock="Left"
                             Style="{StaticResource TopBarButton}" Click="OnEnterFloat"
                             ToolTip="极简浮窗" AutomationProperties.Name="极简浮窗" Padding="0" Width="32">
-                        <Path Data="{StaticResource FloatIcon}" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
+                            <Path Data="{StaticResource FloatIcon}" x:Name="FloatGlyph" Style="{StaticResource GlyphIcon}" Stroke="#AFC5E2"/>
                     </Button>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                         <Button x:Name="MinimizeButton" Style="{StaticResource WindowButton}"
@@ -323,21 +420,21 @@
             <Border DockPanel.Dock="Bottom" MinHeight="38" Background="#1E1F26"
                     BorderBrush="#303641" BorderThickness="0,1,0,0" Padding="10,0">
                 <DockPanel VerticalAlignment="Center">
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button x:Name="PrevPageButton" Style="{StaticResource IconButton}"
-                                Click="OnPrevPage" ToolTip="上一页" AutomationProperties.Name="上一页">
-                            <Path Data="{StaticResource LeftIcon}" Style="{StaticResource GlyphIcon}" Width="14" Height="14"/>
-                        </Button>
-                        <TextBox x:Name="PageBox" Width="44" KeyDown="OnPageKeyDown" Margin="4,0,4,0"
-                                 TextAlignment="Center" VerticalContentAlignment="Center"
-                                 ToolTip="输入页码后按回车" AutomationProperties.Name="跳至页，输入页码后按回车"/>
-                        <TextBlock x:Name="PageTotal" VerticalAlignment="Center" Foreground="#9BA7B8"
-                                   FontSize="12" Margin="0,0,6,0" Text="页"/>
-                        <Button x:Name="NextPageButton" Style="{StaticResource IconButton}"
-                                Click="OnNextPage" ToolTip="下一页" AutomationProperties.Name="下一页">
-                            <Path Data="{StaticResource RightIcon}" Style="{StaticResource GlyphIcon}" Width="14" Height="14"/>
-                        </Button>
-                    </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="PrevPageButton" Style="{StaticResource IconButton}" Width="26" Height="26"
+                            Click="OnPrevPage" ToolTip="上一页" AutomationProperties.Name="上一页">
+                        <Path Data="{StaticResource LeftIcon}" Style="{StaticResource GlyphIcon}" Width="14" Height="14"/>
+                    </Button>
+                    <TextBox x:Name="PageBox" Width="46" Height="24" KeyDown="OnPageKeyDown" Margin="4,0,4,0"
+                             TextAlignment="Center" VerticalContentAlignment="Center" FontSize="12"
+                             ToolTip="输入页码（如 80）或全书百分比（如 40%）后按回车" AutomationProperties.Name="跳至页，输入页码或百分比后按回车"/>
+                    <TextBlock x:Name="PageTotal" VerticalAlignment="Center" Foreground="#9BA7B8"
+                               FontSize="12" Margin="0,0,6,0" Text="页"/>
+                    <Button x:Name="NextPageButton" Style="{StaticResource IconButton}" Width="26" Height="26"
+                            Click="OnNextPage" ToolTip="下一页" AutomationProperties.Name="下一页">
+                        <Path Data="{StaticResource RightIcon}" Style="{StaticResource GlyphIcon}" Width="14" Height="14"/>
+                    </Button>
+                </StackPanel>
                     <Path Data="{StaticResource BookIcon}" Style="{StaticResource GlyphIcon}"
                           Stroke="#B0BACA" Width="14" Height="14" VerticalAlignment="Center"/>
                     <TextBlock x:Name="PageLabel" Margin="8,0,0,0" VerticalAlignment="Center"
@@ -350,22 +447,32 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <!-- 目录：按需展开 -->
-                <Border x:Name="TocPanel" Width="220" Visibility="Collapsed" Background="#1B2029"
+                <!-- 目录：按需展开（宽 236，UI-SPEC 2.1）；头部显示章节计数 -->
+                <Border x:Name="TocPanel" Width="236" Visibility="Collapsed" Background="#1B2029"
                         BorderBrush="#303641" BorderThickness="0,0,1,0">
                     <DockPanel>
-                        <DockPanel DockPanel.Dock="Top" Margin="8,10,8,6">
+                        <DockPanel DockPanel.Dock="Top" Height="40" Margin="8,0,8,0" VerticalAlignment="Top">
                             <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}"
+                                    Width="22" Height="22"
                                     Click="OnToggleToc" ToolTip="关闭目录" AutomationProperties.Name="关闭目录">
                                 <Path Data="{StaticResource CloseIcon}" Style="{StaticResource GlyphIcon}" Width="12" Height="12"/>
                             </Button>
-                            <TextBlock Text="目录" Foreground="#9BA7B8" FontSize="12" VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="目录" Foreground="#9BA7B8" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TocCountText" Margin="8,0,0,0" Foreground="#6F7A8A"
+                                           FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </DockPanel>
                         <ListBox x:Name="TocList" SelectionChanged="OnChapterSelected"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                  Background="Transparent" BorderThickness="0"
                                  Foreground="#E4E2DC"
+                                 ItemContainerStyle="{StaticResource TocItemContainer}"
+                                 ItemTemplate="{StaticResource TocItemTemplate}"
                                  VirtualizingPanel.VirtualizationMode="Recycling"/>
+                        <TextBlock x:Name="TocEmptyText" Margin="14,8,14,8" Foreground="#9BA7B8" FontSize="12"
+                                   TextWrapping="Wrap" Visibility="Collapsed"
+                                   Text="未识别到章节标题，可继续阅读；下次导入带章节行的 TXT 会自动识别。"/>
                     </DockPanel>
                 </Border>
                 <local:ReadingView x:Name="Reader" Grid.Column="1"/>
@@ -380,26 +487,35 @@
     <Popup x:Name="FileMenuPopup" PlacementTarget="{Binding ElementName=BookButton}"
            Placement="Bottom" StaysOpen="True" AllowsTransparency="True"
            VerticalOffset="4">
-        <Border Style="{StaticResource FlyoutBorder}" Width="308">
+        <!-- 书架弹层（UI-SPEC 2.2 / UI-10）：宽 404、列表上限 360（不超过工作区 50%，打开时按需收紧）；
+             不引入排序——书架按导入顺序排列，标题行只显 N 本。 -->
+        <Border Style="{StaticResource FlyoutBorder}" Width="404">
             <StackPanel>
                 <Button Click="OnImport" Style="{StaticResource CommandButton}" x:Name="ImportButton">
                     <StackPanel Orientation="Horizontal">
                         <Path Data="{StaticResource AddIcon}" Style="{StaticResource MenuIcon}"/>
-                        <TextBlock Text="导入 TXT…" VerticalAlignment="Center"/>
+                        <TextBlock Text="导入 TXT…" VerticalAlignment="Center" FontSize="13"/>
                         <TextBlock Text="Ctrl+O" Margin="18,0,0,0" Foreground="#9BA7B8" FontSize="11"
                                    VerticalAlignment="Center" FontFamily="Consolas"/>
                     </StackPanel>
                 </Button>
-                <DockPanel Margin="8,7,8,2">
+                <DockPanel Margin="8,2,8,0" Height="30" LastChildFill="False">
                     <TextBlock DockPanel.Dock="Right" x:Name="ShelfCountText" Text="0 本"
-                               Foreground="#9BA7B8" FontSize="11"/>
-                    <TextBlock Text="书架" Foreground="#9BA7B8" FontSize="11"/>
+                               Foreground="#6F7A8A" FontSize="11" VerticalAlignment="Center"/>
+                    <TextBlock Text="书架" FontSize="12" VerticalAlignment="Center"
+                               Foreground="#E5E8EE"/>
                 </DockPanel>
-                <ScrollViewer MaxHeight="225" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="ShelfScroll" MaxHeight="360" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="ShelfList" ItemTemplate="{StaticResource ShelfItemTemplate}"/>
                 </ScrollViewer>
+                <Border Background="#333B49" Height="1"/>
+                <Border Height="30">
+                    <TextBlock Margin="9,0,9,0" VerticalAlignment="Center" Foreground="#6F7A8A" FontSize="11"
+                               Text="滚动查看更多 · 阅读进度自动保存"/>
+                </Border>
                 <TextBlock x:Name="ShelfEmptyText" Margin="9,6,9,9" Foreground="#9BA7B8" FontSize="12"
-                           TextWrapping="Wrap" Text="书架为空，点击顶部的书页图标导入一本 TXT 小说。"/>
+                           TextWrapping="Wrap" Visibility="Collapsed"
+                           Text="书架为空。点击上方「导入 TXT…」选择一本 TXT 小说，即可开始阅读。"/>
             </StackPanel>
         </Border>
     </Popup>

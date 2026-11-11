@@ -96,13 +96,40 @@
 - 证据：`.run/colors/`（shot-08～shot-19b 截图、uia.ps1/prep.ps1/holdstate.ps1）；实现提交见 feat/reading-colors 阅读配色轮。
 - 字号轮在「阅读配色…」后插入「正文字号…」。`sky.list_windows` 与 `sky.list_apps` 在本机未列出 `WS_EX_TOOLWINDOW` 的极简浮窗。可在独立 STA 探针中调用对应命令，核对实际浮窗的面板归属与排版结果。该方法覆盖命令分派，实际右键命中仍需桌面复验。证据见 `.run/font-size-app-5673f6bf/probe-result.txt`。
 
+### 浮窗自绘菜单（WPF 窗口版）的自动化（2026-11-09，UI-SPEC 轮）
+- 适用：右键菜单已改为 `FloatMenuWindow`（无边框 WPF 窗口，标题「HiddenReader 浮窗菜单」）后的版本。旧经验「右键菜单是 TrackPopupMenu 原生弹窗」的按键序列不再适用（菜单项总数与顺序都变了）。
+- 关键步骤：①开菜单用真实右键（浮窗中心 0.5,0.5/0.6 处），菜单 `ShowActivated` 自动持前台；②**触发命令优先走键盘**：焦点默认在第一条命令，`↓`×N + `Enter`（顺序 0 背景→1 边框→2 配色→3 字号→4 置顶→5 返回普通→6 退出），比 UIA 枚举按钮再点 rect 更稳；③枚举按钮必须按窗口标题「HiddenReader 浮窗菜单」过滤——按「≥7 个 Button 的进程窗口」匹配会误中其他窗口（本轮实测点到无关窗口的按钮）；④坐标点击菜单按钮前确认前台是菜单窗口（前台是浮窗说明菜单已被顶掉，需重开）。
+- 症状与教训：①脚本运行期间桌面前台偶发被其他应用抢占 → 菜单 `Deactivated` 自动关闭（产品正确行为）→「菜单时有时无」的间歇失败，重试前应确认前台归属而非盲目重开；②坐标表达式粗心（`(Top+Bottom)*0.6` 越过底缘）会把右键点进任务栏，表现为「菜单不开」且截图中出现无关的系统菜单——先核对点击坐标是否在浮窗 rect 内。
+- 证据：`.run/ui14/run3d-result.txt`（面板草稿/回滚/提交、F5/F7、0% 点击翻页、拖动不翻页、边缘缩放 +80、Esc 层级、重启恢复全通过）、`run3e-result.txt`（菜单退出）；截图 `artifacts/ui-03/`、`artifacts/ui-11/`、`artifacts/ui-12/`。
+- 补充（2026-11-10，修复复审轮）：桌面存在其他前台窗口时，`mouse_event`/`keybd_event` 的合成点击会被它**物理拦截**——`WindowFromPoint` 返回别家窗口（如 Chrome 内容区），非置顶浮窗收不到 `WM_LBUTTONDOWN`，断言表现为「点击不翻页」，易误判为应用缺陷；此时 `SetForegroundWindow`、`BringWindowToTop`、`Window.Activate()` 都可能被系统前台策略拒绝。把被测浮窗置顶（`FloatState.Topmost=true`、F7 或菜单「置顶」）即可稳定，并在点击前用 `GetForegroundWindow`/`WindowFromPoint` 记录归属。证据 `.run/ui-fix2/sta-probe/Program.cs`（置顶后 #5 12/12）、`.run/ui-fix2/result-float.txt`（fix5c/fix5d 的前台归属行）。
+
+### UIA 元素 BoundingRectangle 可能为空，按钮/输入框走 Pattern 不走坐标（2026-11-09，UI-SPEC 轮）
+- 适用：对本应用任意控件做自动化点击/输入时。
+- 事实：`FromHandle` 包装后 `FindFirst` 得到的元素 `BoundingRectangle` 可能为 Empty（本轮 `BookButton` 实测），坐标点击会落在 (0,0) 附近；同轮同按钮换 UIA 根（桌面 RootElement 按 PID 过滤）后 rect 又有效——按 hwnd 包装的树不可靠。
+- 关键步骤：按钮一律 `InvokePattern.Invoke()`；文本框用 `ValuePattern.SetValue`（WPF 会触发 TextChanged）+ 元素 `SetFocus()` 后再发 Enter；正文区/浮窗本体（自绘无 UIA）才用窗口 rect 按比例推算坐标。另：`Get-MainHwnd` 若按标题 `HiddenReader*` 匹配会误中浮窗（标题「HiddenReader 浮窗」），需先按类名排除 `HiddenReaderFloatWindow`。
+- 证据：`.run/ui14/scripts/lib.ps1`（Invoke-InAppId/Set-BoxValue 封装）与 `.run/ui14/run1d-result.txt`（场景全绿）。
+
 ### WPF 弹层与模态窗口的 UIA 定位（2026-11-09，图标顶栏轮）
 - 适用：对 WPF `Popup` 弹层（如顶部菜单）和应用内模态窗口（如帮助窗口）做 UIA 自动化。
 - 事实与关键步骤：①弹层内复杂内容按钮（StackPanel 多 TextBlock）不暴露为 UIA Button，多半也无 Name——给按钮加 `x:Name` 用 AutomationId 定位（如 `ImportButton`、`RemoveButton`），或找其 Text 元素按中心真实点击；②弹层刚展开时 UIA 子树异步挂入，FindFirst 可能瞬时为空，需轮询约 2.5 秒再判失败；③`ShowDialog` 模态窗口不出现在 UIA 根子树（`FocusedElement` 却能返回其名称，勿据焦点亮盲信窗口存在）——改用 `Get-ProcessWindows`+标题做 Win32 枚举再 `AutomationElement::FromHandle` 包装。
 - 证据：`.run/icon-menu/probe-uia.ps1`、`probe-help.ps1`（枚举对照）；`run1.ps1`+`result1.txt`（38/38，feat/icon-top-menu）。
 - 补充（2026-11-09，D1 竞态修复轮，实测插桩证据）：①`StaysOpen=False` 弹层的外击自动关闭发生在触发按钮 `PreviewMouseDown` 之前（按下时读 `IsOpen` 已为 False，且后续点击中该隧道事件不再触发——原始按下被弹层捕获转发），`Popup.Closed` 事件恒定迟到约 150ms，因此 Click 处理器无法靠事件时序区分「本次按下关闭」与「早前关闭」；带时间窗的关闭标记方案在此类快速往返场景必然误判。②`PopupAnimation="Fade"` 的关闭淡出在弹层被另一弹层遮挡时动画时钟停滞，hwnd 长期不隐藏：Win32 `IsWindowVisible` 仍为 True、内容元素 `IsOffscreen=False` 且矩形有效，UIA 与命中测试都会被僵尸弹层干扰；自动化判定弹层真实可见性需沿 RawView 向上找最近带 hwnd 祖先再查 `IsWindowVisible`，且实现上应避免给此类 Popup 挂关闭动画。③可靠做法是 `StaysOpen="True"`+手动管理关闭（窗口级 `PreviewMouseDown` 区分触发图标与外击、`Deactivated`/`LocationChanged` 收起），使 `ToggleMenu` 能读到精确 `IsOpen`（实现见 `MainWindow.xaml.cs`，回归 `.run/icon-menu/toggle-race.ps1` 5/5）。
 
+- 补充（2026-11-10，修复复审轮实测）：本应用顶栏「查看 / 设置」弹层的菜单按钮（`CommandButton` + 图标 + 单 TextBlock）既不在主窗口 UIA 子树里，按名称全进程枚举（`MainWindow` + `Get-ProcessWindows`）也找不到，`FindAll(Descendants)` 只见弹层外的顶栏按钮。可用做法：真实鼠标点击顶栏按钮（UIA 矩形中点，先 `Activate-App`），弹层持前台后直接 `Enter` 执行第一项——查看→目录、设置→阅读配色…。证据 `.run/ui-fix2/scripts/run-main.ps1`（`Toggle-Toc`）、`run-colors.ps1`（`GearButton`+Enter）。
+
 ### 边缘缩放拖动与 MoveWindow 传参（2026-11-09，图标顶栏轮）
 - 适用：`gui.ps1` 系脚本做 WindowChrome 窗口边缘缩放自动化、脚本内自拼 RECT 结构时。
 - 关键步骤：①按住鼠标的缩放拖动必须增量移动（每步 ~10px 间隔 60ms），单步 50px 大跳跃实测不被窗口尺寸循环跟随，dw=0 会误判为应用缺陷（`SetCursorPos` 校验通过也无济于事）；②自定义 RECT 结构（只有 Left/Top/Right/Bottom）没有 Width/Height——`MoveWindow` 传 `$null` 宽高会把窗口缩成 0 尺寸且无报错，后续所有坐标断言连环失败，宽高一律用 `Right-Left`/`Bottom-Top` 现算。
 - 证据：`.run/icon-menu/probe-narrow.ps1`（增量移动 +50 生效、窄窗命中成功）对照 `run1.ps1` 早期 dw=0 记录；`result1.txt`。
+
+### 复用历史验证脚本前，先核对脚本内的构建产物路径（2026-11-10，修复轮）
+- 适用：任何复用 `.run/<旧轮>/scripts/lib.ps1` 或其中 `Start-App` 的验证轮。
+- 事实：lib.ps1 的 `$script:Exe` 硬编码指向**旧轮构建目录**（如 `.run/ui14/build/`）。本轮修复后若不同步改路径，桌面验证会全程跑在**旧构建**上——出现「STA 探针全过、桌面断言异常」的分裂现象，且部分断言可能因旧行为碰巧符合而误判通过，误导排查方向（本轮实测：Exe 路径事故导致 fix-run1 首轮结论作废）。
+- 关键步骤：①复用前 `grep -n "Exe" lib.ps1` 确认产物路径为本轮构建；②每轮开始用一条「行为指纹」断言校验产物版本（如本轮以 STA 探针的 `time-sentinel-field-removed` 断言或新增日志行验证新代码确实在跑）；③lib.ps1 级公共脚本被多轮复用时，把产物路径改为环境变量参数。
+- 证据：`.run/ui-fix/`（修正路径前后 fix-run1 结论反转）、`.run/ui-fix/sta-probe/run.ps1`。
+
+### PowerShell 验证脚本的几个高频坑（2026-11-10，修复轮补充）
+- 函数参数命名不得使用 `$input`（PowerShell 自动变量）：作为形参会静默变空，函数体按空串执行，表现为「功能整体失效但无报错」。本轮 `Jump-PageBox([string]$input)` 五连跳全部空转即此因。
+- 写回 .ps1 的工具（perl -0pi、部分 sed）会**剥掉 UTF-8 BOM**：无 BOM 的中文脚本被 PowerShell 5.1 按 GBK 解析，中文锚点字符串全部失配、中文字面量乱码。凡 perl/sed 修改过含中文的 .ps1，改后必须重跑 tobom；脚本内比较/匹配中文的锚点尽量用 `[char]0xXXXX` 拼接规避。
+- 证据：`.run/ui-fix/`（`$input` 事故修复前后的 run1 输出对比；BOM 修复前后 run3c 的菜单标题匹配失败与恢复）。
+- 结果文件被脚本自身与 `Tee-Object` 双重占用：脚本末尾 `Set-Content <轮次>/result-x.txt` 与外层 `... | Tee-Object -FilePath <同一路径>` 并发写会抛 `IOException`，脚本退出码仍为 0，但断言文件缺失或为空。让脚本自己写结果文件，控制台输出另存到不同文件名（如 `float-console.txt`）。
