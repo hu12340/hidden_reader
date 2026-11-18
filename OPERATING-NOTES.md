@@ -9,6 +9,11 @@
 - 用 `dotnet build src/HiddenReader.App/HiddenReader.App.csproj -o <本轮绝对路径>/build` 生成独立可执行文件。用本轮 `HR_DATA_DIR` 和 `HR_LOG_DIR` 启动该文件，结束时先核对进程路径和 PID 再清理测试实例。
 - 证据：`.run/font-size-app-5673f6bf/build/`（字号轮使用独立输出，构建成功）。
 
+### Git Bash 里用 `$()` 捕获 GUI 启动命令的输出会挂起（2026-11-18）
+- 适用：从 Git Bash 运行内部用 `start` 拉起 GUI 程序的 .cmd，并试图 `out=$(cmd //c xxx.cmd)` 捕获输出。GUI 子进程继承 stdout 管道，bash 等待 EOF 直到应用退出，外层命令超时（实测 120s），而应用本身已正常启动。
+- 关键步骤：验证启动类脚本时不做输出捕获，顺序执行后用 `Get-Process` 核对进程与路径；需要留证时先直接运行，凭终端回显与进程清单取证。
+- 证据：本轮 `启动HiddenReader.cmd` 验证（捕获版挂起超时但应用已启动；不捕获版与 `rebuild` 版均立即返回）。
+
 ### 启动清理白名单（2026-11-06 起，「先构造再放样例」的限制已失效；N3/N4 修订）
 - 适用：`Library` 构造期清理为白名单 + 保留清单三态 + Books 数组校验的版本（N1–N4，见 `REPORT-N1-N2.md`、`REPORT-N3-N4.md`）。
 - 新结论：①非应用命名的文件（如 `testdata` 的 `test-book-1.txt`、`keepme.txt/.dat/.tmp`）永远不会被清理，样例放入顺序无关紧要；②状态文件缺失、损坏或缺少可读取的 Books 数组（`{}`、`{"Books":null}`、类型错误）时不做任何清理，应用命名的副本记入 `library.preserved.json` 保留清单，重启也不误删；③`library.preserved.json` 存在但不可信（JSON 损坏、内容 null、元素非字符串、读取失败/被占用）时跳过整次启动清理且绝不写回覆盖故障现场——探针造读取失败可用 `FileShare.None` 独占持有；④有效书架（显式 `"Books"` 数组，含 `[]`）下仍会删除「无引用且不在保留清单中」的 `32位十六进制.txt` 副本及 `.txt.tmp`——探针手工构造应用命名样例且配有效书架时，需登记进保留清单或留到记录阶段之后放入。
@@ -28,10 +33,12 @@
 - 关键步骤：给数据项重写 `ToString()` 返回显示文本（与 TocItem 同法），并移除 DisplayMemberPath；闭合框内容绑定 `SelectionBoxItem.Title`。
 - 证据：`artifacts/combo-probe-open.png`（修复前下拉项显示类型名）与 `artifacts/n2-03-toolbar-after-failure.png`（修复后显示 book1）；提交记录见 `REPORT-N1-N2.md` §N2 附带修复。
 
-### PowerShell 5.1 中文脚本必须保存为 UTF-8 with BOM（2026-11-06 复验）
+### 中文脚本保存编码：.ps1 须 UTF-8 with BOM，.cmd 须纯 ASCII 或 ANSI/GBK + CRLF（.ps1 2026-11-06 复验，.cmd 2026-11-18）
 - 适用：所有含中文的 `.ps1`。AI 的文件工具默认写 UTF-8 无 BOM，新写脚本运行前必须转换；纯 ASCII 驱动脚本豁免。无 BOM 时按系统 ANSI 解析，中文字符串/正则全部乱码并产生解析错误（如「字符串缺少终止符」，脚本整体不执行，编辑器中显示正常）。
 - 关键步骤：`[IO.File]::WriteAllText($path, (ReadAllText ...), (New-Object Text.UTF8Encoding $true))`；批量转换建议写一个纯 ASCII 的驱动脚本逐个改写目标脚本，避免在 shell 内联命令中转义路径与反斜杠（内联转义错误会另产生空杂散文件）。
 - 证据：`.run/rvw/convert.ps1`（驱动脚本）与 `.run/rvw/test-rvw1.ps1`（转换后成功运行，结果 `rvw1-result.txt`）。
+- `.bat/.cmd` 补充（2026-11-18）：cmd 无 BOM 机制，按系统 ANSI/GBK 逐字节解析，且 AI 文件工具默认写 UTF-8 + LF。UTF-8 中文即使只出现在 `rem` 注释里也会破坏解析——实测某行被拆成 `'猴紱浼?rebuild' 不是内部或外部命令`，而脚本继续执行、应用照常启动，报错易被掩盖。中文 .cmd 用纯 ASCII 内容 + CRLF 换行最稳（`file` 应显示 `ASCII text, with CRLF line terminators`）；后续 AI 用文件工具重写会还原成 UTF-8 + LF，须重新 `unix2dos`。
+- `.cmd` 证据：`.run/launch-selfcheck/`（仓库根 `启动HiddenReader.cmd`：UTF-8 版报错；ASCII+CRLF 版无输出，正常启动与 `rebuild` 构建分支均验证通过）。
 
 ### SetCursorPos 偶发不生效，鼠标点击前必须校验坐标
 - 适用：`tools/gui.ps1` 的 `Mouse-Click`/`Mouse-DownAt`（已内置 `Move-CursorVerified` 重试）。
