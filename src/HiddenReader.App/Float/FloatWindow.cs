@@ -213,8 +213,10 @@ internal sealed class FloatWindow : IDisposable
     /// <summary>不透明度面板草稿：非 null 时渲染用草稿值，「确定」转正、「取消」丢弃。</summary>
     private (double Background, double Border)? _opacityDraft;
 
-    /// <summary>返回普通模式请求（浮窗保持打开，等待再次进入或退出）。</summary>
+    /// <summary>返回普通模式请求：宿主隐藏浮窗回到普通模式，浮窗对象保留等待再次进入或退出。</summary>
     public event Action? ReturnToNormalRequested;
+    /// <summary>最小化整个软件请求：宿主隐藏浮窗并把主窗口以最小化态放入任务栏。</summary>
+    public event Action? MinimizeRequested;
     /// <summary>用户选择退出：宿主应保存状态并关闭应用。</summary>
     public event Action? ExitRequested;
     /// <summary>任何交互后触发，宿主可保存状态。</summary>
@@ -593,8 +595,12 @@ internal sealed class FloatWindow : IDisposable
                 StateChanged?.Invoke();
                 Render();
                 break;
-            case 0x1B: // esc
+            case 0x0D: // enter
                 ReturnToNormalRequested?.Invoke();
+                break;
+            case 0x1B: // esc
+                // Esc 直接最小化整个软件（不再弹主界面）；返回普通模式改由 Enter 或菜单承担。
+                MinimizeRequested?.Invoke();
                 break;
             case 0x43: // C
                 if ((GetKeyState(0x11) & 0x8000) != 0) CopySelection();
@@ -659,7 +665,7 @@ internal sealed class FloatWindow : IDisposable
             new(FloatMenuRowKind.Command, ID_FONT_SIZE, "正文字号…"),
             new(FloatMenuRowKind.GroupLabel, text: "窗口"),
             new(FloatMenuRowKind.Command, ID_TOPMOST, "置顶", @checked: Topmost),
-            new(FloatMenuRowKind.Command, ID_NORMAL, "返回普通模式", suffix: "Esc"),
+            new(FloatMenuRowKind.Command, ID_NORMAL, "返回普通模式", suffix: "Enter"),
             new(FloatMenuRowKind.Separator),
             new(FloatMenuRowKind.Command, ID_EXIT, "退出", danger: true),
         };

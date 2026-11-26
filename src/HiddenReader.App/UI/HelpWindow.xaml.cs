@@ -37,7 +37,7 @@ public partial class HelpWindow : Window
             new Row("打开小说", "点顶部的书页图标导入 TXT，或从书架选择小说继续阅读。"),
             new Row("查找正文", "点眼睛图标打开目录或搜索。"),
             new Row("阅读设置", "点齿轮图标调整阅读配色或正文字号。"),
-            new Row("极简浮窗", "点最右侧的浮窗图标进入极简模式。进入后用滚轮阅读，右键可调整字号，按 Esc 返回普通模式。" +
+            new Row("极简浮窗", "点最右侧的浮窗图标进入极简模式。进入后用滚轮阅读，右键可调整字号，按 Enter 返回普通模式，按 Esc 将整个软件最小化。" +
                 "移动浮窗：按住 Ctrl，在浮窗正文区按住鼠标左键拖动。"),
         });
 
@@ -49,7 +49,8 @@ public partial class HelpWindow : Window
             new Row("Ctrl+O", "在普通模式导入 TXT。", TermIsKey: true),
             new Row("Ctrl+F", "在普通模式搜索当前小说。", TermIsKey: true),
             new Row("← / →", "正文窗口有焦点时向前／向后翻页。", TermIsKey: true),
-            new Row("Esc", "收起菜单、关闭搜索栏，或在极简浮窗中返回普通模式。", TermIsKey: true),
+            new Row("Esc", "收起菜单、关闭搜索栏；无浮层时最小化窗口，在极简浮窗中最小化整个软件。", TermIsKey: true),
+            new Row("Enter", "在极简浮窗中返回普通模式。", TermIsKey: true),
             // 浮窗三键此前不可发现（REVIEW P1-5）：仅浮窗有焦点时生效；F5/F6 为三档循环快捷方式，
             // 连续调节走浮窗右键菜单的「背景/边框不透明度」面板（UI-03）。
             new Row("F5", "仅浮窗有焦点时生效：循环背景不透明度 100%→50%→0%（三档快捷方式，连续调节用浮窗右键菜单）。", TermIsKey: true),

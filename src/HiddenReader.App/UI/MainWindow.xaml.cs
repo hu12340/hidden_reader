@@ -860,6 +860,9 @@ public partial class MainWindow : Window
 
     private void SaveWindowState()
     {
+        // 最小化态的 Left/Top/Width/Height 是系统还原坐标（实测会落成 160x39 细条），
+        // 此时跳过几何保存，保留上一次正常布局；恢复后再由位置/尺寸变化事件写回。
+        if (WindowState == WindowState.Minimized) return;
         _library.State.WindowX = Left;
         _library.State.WindowY = Top;
         _library.State.WindowWidth = Width;
@@ -871,9 +874,16 @@ public partial class MainWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // Esc：先关最上层的浮层（菜单/搜索栏），焦点落到可继续操作的位置。
-        if (e.Key == Key.Escape && CloseTopOverlay())
+        // Esc：先关最上层的浮层（菜单/搜索栏），焦点落到可继续操作的位置；
+        // 无浮层可关时最小化到任务栏（层层退出语义，帮助窗口同步记载）。
+        if (e.Key == Key.Escape)
         {
+            if (CloseTopOverlay())
+            {
+                e.Handled = true;
+                return;
+            }
+            WindowState = WindowState.Minimized;
             e.Handled = true;
             return;
         }
@@ -1388,6 +1398,7 @@ public partial class MainWindow : Window
             var floatState = _library.GetBookState(_currentBook.Id).Float;
             _float = new FloatWindow(_session, floatState);
             _float.ReturnToNormalRequested += OnReturnToNormal;
+            _float.MinimizeRequested += OnMinimizeFromFloat;
             _float.ExitRequested += OnExitFromFloat;
             _float.StateChanged += OnFloatStateChanged;
             _float.ReadingColorsRequested += OpenReadingColorsPanel;
@@ -1409,7 +1420,8 @@ public partial class MainWindow : Window
         _library.Save();
     }
 
-    private void OnReturnToNormal()
+    /// <summary>浮窗侧请求离开浮窗模式的共用收尾：关面板、存浮窗状态、隐藏浮窗。</summary>
+    private void LeaveFloatMode()
     {
         CloseReadingColorsPanel();
         CloseOpacityPanel();
@@ -1418,9 +1430,26 @@ public partial class MainWindow : Window
             _library.GetBookState(_currentBook.Id).Float = _float.CaptureState();
         }
         _float?.Hide();
+    }
+
+    private void OnReturnToNormal()
+    {
+        LeaveFloatMode();
         Show();
         Activate();
         Reader.Focus();
+        _library.State.LastMode = "normal";
+        _library.Save();
+        UpdateStatusLabel();
+    }
+
+    /// <summary>浮窗按 Esc：整个软件最小化——浮窗隐藏，主窗口以最小化态出现在任务栏，
+    /// 点任务栏图标恢复即普通模式。先置最小化再 Show，避免主窗口先弹出再缩下的闪烁。</summary>
+    private void OnMinimizeFromFloat()
+    {
+        LeaveFloatMode();
+        WindowState = WindowState.Minimized;
+        Show();
         _library.State.LastMode = "normal";
         _library.Save();
         UpdateStatusLabel();

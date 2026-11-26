@@ -108,7 +108,7 @@
 - 关键步骤：①开菜单用真实右键（浮窗中心 0.5,0.5/0.6 处），菜单 `ShowActivated` 自动持前台；②**触发命令优先走键盘**：焦点默认在第一条命令，`↓`×N + `Enter`（顺序 0 背景→1 边框→2 配色→3 字号→4 置顶→5 返回普通→6 退出），比 UIA 枚举按钮再点 rect 更稳；③枚举按钮必须按窗口标题「HiddenReader 浮窗菜单」过滤——按「≥7 个 Button 的进程窗口」匹配会误中其他窗口（本轮实测点到无关窗口的按钮）；④坐标点击菜单按钮前确认前台是菜单窗口（前台是浮窗说明菜单已被顶掉，需重开）。
 - 症状与教训：①脚本运行期间桌面前台偶发被其他应用抢占 → 菜单 `Deactivated` 自动关闭（产品正确行为）→「菜单时有时无」的间歇失败，重试前应确认前台归属而非盲目重开；②坐标表达式粗心（`(Top+Bottom)*0.6` 越过底缘）会把右键点进任务栏，表现为「菜单不开」且截图中出现无关的系统菜单——先核对点击坐标是否在浮窗 rect 内。
 - 证据：`.run/ui14/run3d-result.txt`（面板草稿/回滚/提交、F5/F7、0% 点击翻页、拖动不翻页、边缘缩放 +80、Esc 层级、重启恢复全通过）、`run3e-result.txt`（菜单退出）；截图 `artifacts/ui-03/`、`artifacts/ui-11/`、`artifacts/ui-12/`。
-- 补充（2026-11-10，修复复审轮）：桌面存在其他前台窗口时，`mouse_event`/`keybd_event` 的合成点击会被它**物理拦截**——`WindowFromPoint` 返回别家窗口（如 Chrome 内容区），非置顶浮窗收不到 `WM_LBUTTONDOWN`，断言表现为「点击不翻页」，易误判为应用缺陷；此时 `SetForegroundWindow`、`BringWindowToTop`、`Window.Activate()` 都可能被系统前台策略拒绝。把被测浮窗置顶（`FloatState.Topmost=true`、F7 或菜单「置顶」）即可稳定，并在点击前用 `GetForegroundWindow`/`WindowFromPoint` 记录归属。证据 `.run/ui-fix2/sta-probe/Program.cs`（置顶后 #5 12/12）、`.run/ui-fix2/result-float.txt`（fix5c/fix5d 的前台归属行）。
+- 补充（2026-11-10，修复复审轮）：桌面存在其他前台窗口时，`mouse_event`/`keybd_event` 的合成点击会被它**物理拦截**——`WindowFromPoint` 返回别家窗口（如 Chrome 内容区），非置顶浮窗收不到 `WM_LBUTTONDOWN`，断言表现为「点击不翻页」，易误判为应用缺陷；此时 `SetForegroundWindow`、`BringWindowToTop`、`Window.Activate()` 都可能被系统前台策略拒绝。把被测浮窗置顶（`FloatState.Topmost=true`、F7 或菜单「置顶」）即可稳定，并在点击前用 `GetForegroundWindow`/`WindowFromPoint` 记录归属；点击已确认命中而断言不动时，先核对断言读取的数据字段本身是否正确（2026-11-18 补充：翻页已生效而锚点恒 0，实为脚本读错 JSON 字段，见 `.run/esc-min/run3-console.txt`）。证据 `.run/ui-fix2/sta-probe/Program.cs`（置顶后 #5 12/12）、`.run/ui-fix2/result-float.txt`（fix5c/fix5d 的前台归属行）。
 
 ### UIA 元素 BoundingRectangle 可能为空，按钮/输入框走 Pattern 不走坐标（2026-11-09，UI-SPEC 轮）
 - 适用：对本应用任意控件做自动化点击/输入时。
@@ -135,8 +135,13 @@
 - 关键步骤：①复用前 `grep -n "Exe" lib.ps1` 确认产物路径为本轮构建；②每轮开始用一条「行为指纹」断言校验产物版本（如本轮以 STA 探针的 `time-sentinel-field-removed` 断言或新增日志行验证新代码确实在跑）；③lib.ps1 级公共脚本被多轮复用时，把产物路径改为环境变量参数。
 - 证据：`.run/ui-fix/`（修正路径前后 fix-run1 结论反转）、`.run/ui-fix/sta-probe/run.ps1`。
 
-### PowerShell 验证脚本的几个高频坑（2026-11-10，修复轮补充）
+### PowerShell 验证脚本的几个高频坑（2026-11-10 起，多次轮次补充）
 - 函数参数命名不得使用 `$input`（PowerShell 自动变量）：作为形参会静默变空，函数体按空串执行，表现为「功能整体失效但无报错」。本轮 `Jump-PageBox([string]$input)` 五连跳全部空转即此因。
 - 写回 .ps1 的工具（perl -0pi、部分 sed）会**剥掉 UTF-8 BOM**：无 BOM 的中文脚本被 PowerShell 5.1 按 GBK 解析，中文锚点字符串全部失配、中文字面量乱码。凡 perl/sed 修改过含中文的 .ps1，改后必须重跑 tobom；脚本内比较/匹配中文的锚点尽量用 `[char]0xXXXX` 拼接规避。
 - 证据：`.run/ui-fix/`（`$input` 事故修复前后的 run1 输出对比；BOM 修复前后 run3c 的菜单标题匹配失败与恢复）。
 - 结果文件被脚本自身与 `Tee-Object` 双重占用：脚本末尾 `Set-Content <轮次>/result-x.txt` 与外层 `... | Tee-Object -FilePath <同一路径>` 并发写会抛 `IOException`，脚本退出码仍为 0，但断言文件缺失或为空。让脚本自己写结果文件，控制台输出另存到不同文件名（如 `float-console.txt`）。
+- 读 `library.json` 阅读锚点用 `PerBook.<LastBookId>.Anchor`（ConvertFrom-Json 后 `$j.PerBook.($j.LastBookId).Anchor`）：`Books[]` 数组元素没有 `Anchor` 字段，按数组元素读恒得 0——表现为翻页断言假 FAIL 或 0==0 假通过（2026-11-18 实测，修正前后对比见 `.run/esc-min/run3-result.txt` 与 `run3-console.txt`）。
+- 应用冷启动后立即发合成键可能整体落空（约 800ms 内，无报错、无日志）：启动后等 ≥1.5s 再发键，或让关键断言失败时自动重试一次再判；同一脚本首跑 FAIL、加等待后全绿且重试未触发即此因（2026-11-18，两次输出对比见 `.run/esc-min/run4-console.txt`）。
+- 窗口最小化断言用 `IsIconic` + `IsWindowVisible` 组合：最小化窗口 `IsWindowVisible` 仍为 true，两者同时成立即「缩到任务栏且可达」；「点任务栏恢复」自动化用 `ShowWindow(SW_RESTORE)` 代理并在报告中注明差异（2026-11-18，证据 `.run/esc-min/run1-result.txt`、`run4-result.txt`）。
+- 校验含中文的 JSON 不要用 `Get-Content -Raw`（无 BOM 的 UTF-8 被按 ANSI/GBK 误读，乱码吞掉引号后 ConvertFrom-Json 假报解析失败）；用 `[IO.File]::ReadAllText`（自动按 UTF-8 解码）。同理，`git show <file>` 输出经 PowerShell 管道/`Out-File` 落盘会按 console 代码页重编码、中文全部乱码，字节级提取改用 bash 重定向 `>`。两个假警报都会把有效文件误判为损坏（2026-11-18，对照见 `.run/esc-min/scripts/check-json.ps1` 与 `tokens-prev2.json`/`tokens-new2.json`）。
+- 检索 .NET DLL 是否含某 UTF-16 字符串，不要用 `GetString(全部字节).Contains()`：#US 堆的字符串常落在文件**奇数字节偏移**（压缩长度前缀 1 字节所致），偶对齐解码得到错位假文本——新串假阴性、旧串可能假阳性（本轮两种扫描互相矛盾实为一因）。权威方法＝字节模式搜索：`[Text.Encoding]::Unicode.GetBytes(探针)` 后逐字节比对。中文探针用码位构造 `-join [char[]](0x65E0,...)`，含中文的 .ps1（无 BOM 时连注释里的中文都会 GBK 误析吞换行致解析错误）一律纯 ASCII；Git Bash 向 `powershell -Command` 传中文也会乱码，一律写 .ps1 文件执行（2026-11-18，`.run/esc-min/scripts/scan-dll.ps1`→`scan-dll2.ps1`→`scan-dll3.ps1` 三版演进）。

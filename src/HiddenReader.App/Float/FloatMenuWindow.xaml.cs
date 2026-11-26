@@ -195,7 +195,7 @@ public partial class FloatMenuWindow : Window
                 }
                 else
                 {
-                    // 快捷键提示（如 Esc）：10px 次要色。
+                    // 快捷键提示（如 Enter）：10px 次要色。
                     suffix.FontSize = 10;
                     suffix.Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x94, 0xA3));
                 }

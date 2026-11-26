@@ -1,6 +1,7 @@
 @echo off
 rem HiddenReader launcher (double-click to start).
-rem No args: start the Debug build, building it first only if missing. "rebuild" arg: always build first.
+rem No args: build only if the exe is missing or the source tree is newer than the exe
+rem (staleness check via tools\Check-LauncherFreshness.ps1). "rebuild" arg: always build first.
 rem Library defaults to %APPDATA%\HiddenReader; HR_DATA_DIR / HR_LOG_DIR env vars still override (for test rounds).
 rem Keep this file ASCII + CRLF: UTF-8 Chinese text breaks cmd parsing (see OPERATING-NOTES).
 setlocal
@@ -11,6 +12,10 @@ set "EXE=%ROOT%src\HiddenReader.App\bin\Debug\net10.0-windows\HiddenReader.exe"
 if /i "%~1"=="rebuild" set "NEEDBUILD=1"
 if not exist "%EXE%" set "NEEDBUILD=1"
 
+if not defined NEEDBUILD (
+    for /f %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%tools\Check-LauncherFreshness.ps1" "%EXE%"') do if "%%i"=="1" set "NEEDBUILD=1"
+)
+
 if defined NEEDBUILD (
     if not exist "%DOTNET%" (
         echo [launcher] dotnet.exe not found: "%DOTNET%"
@@ -20,7 +25,7 @@ if defined NEEDBUILD (
     echo [launcher] Building HiddenReader.App ...
     "%DOTNET%" build "%ROOT%src\HiddenReader.App\HiddenReader.App.csproj" --nologo -v m
     if errorlevel 1 (
-        echo [launcher] Build FAILED.
+        echo [launcher] Build FAILED. Close any running HiddenReader instance and try again ^(locked files are the usual cause^).
         pause
         exit /b 1
     )
